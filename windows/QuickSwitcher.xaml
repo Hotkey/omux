@@ -1,0 +1,27 @@
+<Window x:Class="Omux.QuickSwitcher"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Width="460" Height="380" WindowStyle="None" ResizeMode="NoResize" ShowInTaskbar="False"
+        WindowStartupLocation="CenterOwner" Background="{DynamicResource ChromeBrush}"
+        Foreground="{DynamicResource ForegroundBrush}" BorderBrush="{DynamicResource SelectionBrush}" BorderThickness="1">
+  <DockPanel>
+    <TextBox x:Name="Query" DockPanel.Dock="Top" Style="{StaticResource SheetSearch}" Tag="Jump to session…"
+             TextChanged="Query_TextChanged" PreviewKeyDown="Query_PreviewKeyDown" />
+    <Border DockPanel.Dock="Top" Height="1" Background="{DynamicResource SeparatorBrush}" />
+    <ListBox x:Name="Results" ItemContainerStyle="{StaticResource SheetRow}" Background="Transparent" BorderThickness="0"
+             Padding="0,6" ScrollViewer.HorizontalScrollBarVisibility="Disabled" MouseLeftButtonUp="Results_MouseLeftButtonUp">
+      <ListBox.ItemTemplate>
+        <DataTemplate>
+          <DockPanel>
+            <Ellipse DockPanel.Dock="Left" Width="8" Height="8" Fill="{Binding Tab.DotBrush}" VerticalAlignment="Center" Margin="0,0,8,0" />
+            <TextBlock DockPanel.Dock="Right" Text="{Binding Tab.Runtime.SidebarLine}" Style="{StaticResource Caption}" MaxWidth="180" Margin="8,0,0,0" VerticalAlignment="Center" />
+            <TextBlock VerticalAlignment="Center" TextTrimming="CharacterEllipsis">
+              <Run Text="{Binding Tab.Name, Mode=OneWay}" />
+              <Run Text="{Binding Group.Name, Mode=OneWay}" Foreground="{DynamicResource SecondaryBrush}" />
+            </TextBlock>
+          </DockPanel>
+        </DataTemplate>
+      </ListBox.ItemTemplate>
+    </ListBox>
+  </DockPanel>
+</Window>

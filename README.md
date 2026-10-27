@@ -4,7 +4,7 @@ A native macOS terminal for running many [Claude Code](https://claude.com/claude
 
 ![omux with three projects in the sidebar, a Claude Code session editing a settings page, and the files panel previewing a Markdown plan](docs/screenshot.png)
 
-Built with SwiftUI and [SwiftTerm](https://github.com/migueldeicaza/SwiftTerm).
+Built with SwiftUI and [SwiftTerm](https://github.com/migueldeicaza/SwiftTerm). A Windows version with the same features lives in [`windows/`](#windows).
 
 ## Features
 
@@ -59,6 +59,53 @@ Local files omux touches:
 - `~/Library/Application Support/omux/workspace.json`: your projects and sessions (plus a `.bak` copy).
 - `~/.claude/projects`: read to list recent conversations and to check whether a session's conversation exists.
 - Settings are stored in the standard macOS preferences.
+
+## Windows
+
+`windows/` is a native Windows port with the same features: projects and sessions, conversations that resume, live status, the files panel, recent conversations, usage limits, themes and the quick switcher. It is a WPF app; each session runs in a Windows pseudo console (ConPTY) and is drawn by [xterm.js](https://xtermjs.org) in WebView2.
+
+### Requirements
+
+- Windows 10 1809 or later (Windows 11 recommended)
+- The Microsoft Edge WebView2 Runtime (preinstalled on Windows 11 and current Windows 10)
+- [.NET 10 SDK](https://dotnet.microsoft.com/download) to build; the built app is self-contained
+- [Claude Code](https://claude.com/claude-code) on your `PATH` as `claude` for Claude sessions
+
+### Build
+
+```powershell
+windows\build.ps1
+windows\dist\omux\omux.exe
+```
+
+`build.ps1` publishes a self-contained `omux.exe` to `windows\dist\omux` and zips it. For development, `dotnet run --project windows` works too.
+
+Sessions run in PowerShell 7 when it is installed, otherwise Windows PowerShell; Settings can switch to `cmd.exe`, Git Bash or any other shell. Settings also adds "Open in omux" to Explorer's right-click menu on folders. You can also drop a folder on the window or run `omux.exe <folder>`, which hands the folder to the running omux.
+
+### Keyboard shortcuts
+
+Ctrl+T, Ctrl+R, Ctrl+K and Ctrl+O belong to Claude Code and the shell, so omux's own shortcuts use Ctrl+Shift. The ••• button in the sidebar lists every command.
+
+| Action | Shortcut |
+| --- | --- |
+| New session / new shell / new project | Ctrl+Shift+T / Ctrl+Shift+Alt+T / Ctrl+Shift+N |
+| Open folder / recent Claude conversation | Ctrl+Shift+O / Ctrl+Shift+Alt+O |
+| Close session | Ctrl+Shift+W |
+| Rename / edit session | F2 / Ctrl+Shift+I |
+| Restart session | Ctrl+Shift+R |
+| Interrupt (Ctrl-C) | Ctrl+Shift+. |
+| Continue Claude conversation | Ctrl+Shift+Enter |
+| Jump to session | Ctrl+Shift+K |
+| Next / previous session | Ctrl+Tab / Ctrl+Shift+Tab |
+| Session 1–9 in the current project | Ctrl+1 … Ctrl+9 |
+| Files panel | Ctrl+Shift+F |
+| Settings / quit | Ctrl+, / Alt+F4 |
+
+In a terminal, Ctrl+C copies when text is selected, Ctrl+V pastes, right-click copies the selection or pastes, and Ctrl-click opens a URL or previews a file path.
+
+### Privacy on Windows
+
+The same single network request as on macOS, for usage limits. Claude Code on Windows keeps its login in `%USERPROFILE%\.claude\.credentials.json`; omux reads the access token from there and never writes or logs it. Your projects and sessions are saved to `%APPDATA%\omux\workspace.json` (plus a `.bak` copy) and settings to `%APPDATA%\omux\settings.json`.
 
 ## Disclaimer
 
