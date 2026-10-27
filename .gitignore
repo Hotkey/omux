@@ -1,0 +1,15 @@
+# SwiftPM build output
+.build/
+.swiftpm/
+
+# App bundle made by build.sh
+build/
+
+# Xcode, if the package is opened there
+*.xcodeproj
+xcuserdata/
+DerivedData/
+
+# macOS and logs
+.DS_Store
+*.log
