@@ -13,3 +13,10 @@ DerivedData/
 # macOS and logs
 .DS_Store
 *.log
+
+# Windows build output
+windows/bin/
+windows/obj/
+windows/dist/
+.vs/
+*.user

@@ -1,0 +1,66 @@
+<Window x:Class="Omux.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:local="clr-namespace:Omux"
+        Title="omux" Width="1240" Height="780" MinWidth="720" MinHeight="420"
+        Icon="Assets/omux.ico" WindowStartupLocation="CenterScreen"
+        Background="{DynamicResource ChromeBrush}" Foreground="{DynamicResource ForegroundBrush}"
+        AllowDrop="True">
+  <Window.TaskbarItemInfo>
+    <TaskbarItemInfo x:Name="Taskbar" />
+  </Window.TaskbarItemInfo>
+
+  <Grid>
+    <Grid.ColumnDefinitions>
+      <ColumnDefinition Width="250" MinWidth="200" MaxWidth="420" />
+      <ColumnDefinition Width="5" />
+      <ColumnDefinition Width="*" MinWidth="360" />
+      <ColumnDefinition x:Name="FilesSplitterColumn" Width="5" />
+      <ColumnDefinition x:Name="FilesColumn" Width="340" MinWidth="240" MaxWidth="800" />
+    </Grid.ColumnDefinitions>
+
+    <local:SidebarView x:Name="Sidebar" Grid.Column="0" />
+    <GridSplitter Grid.Column="1" Style="{StaticResource Divider}" ResizeBehavior="PreviousAndNext" ResizeDirection="Columns" />
+
+    <DockPanel Grid.Column="2" DataContext="{x:Static local:Store.Shared}">
+      <!-- Slim strip above the terminal: name, live status, folder and stop/start. -->
+      <Border DockPanel.Dock="Top" Height="28" Background="{DynamicResource ChromeBrush}"
+              BorderBrush="{DynamicResource SeparatorBrush}" BorderThickness="0,0,0,1">
+        <DockPanel Margin="10,0">
+          <Button DockPanel.Dock="Right" Style="{StaticResource IconButton}" Content="&#xE89F;" Click="ToggleFiles_Click"
+                  x:Name="FilesToggle" ToolTip="Files panel (Ctrl+Shift+F)" Margin="6,0,0,0" />
+          <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" DataContext="{Binding SelectedTab}"
+                      Visibility="{Binding Converter={StaticResource NotNull}}">
+            <Button Style="{StaticResource IconButton}" Content="&#xE71A;" FontSize="10" ToolTip="Interrupt (Ctrl-C)"
+                    Click="Stop_Click" Visibility="{Binding Runtime.Busy, Converter={StaticResource Visible}}" />
+            <Button Style="{StaticResource IconButton}" Content="&#xE768;" FontSize="10" ToolTip="Continue this Claude conversation"
+                    Click="Start_Click" Visibility="{Binding Runtime.Busy, Converter={StaticResource Hidden}}" />
+          </StackPanel>
+          <StackPanel Orientation="Horizontal" DataContext="{Binding SelectedTab}" VerticalAlignment="Center"
+                      Visibility="{Binding Converter={StaticResource NotNull}}">
+            <Ellipse Width="8" Height="8" Fill="{Binding DotBrush}" VerticalAlignment="Center" />
+            <TextBlock Text="{Binding Name}" FontSize="11" FontWeight="SemiBold" Margin="10,0,0,0" VerticalAlignment="Center" />
+            <TextBlock Text="{Binding Runtime.HeaderLine}" Style="{StaticResource Caption}" FontSize="10" Margin="10,0,0,0"
+                       VerticalAlignment="Center" MaxWidth="420" />
+          </StackPanel>
+          <TextBlock DataContext="{Binding SelectedTab}" Text="{Binding Runtime.Cwd, Converter={StaticResource Abbreviate}}"
+                     FontSize="10" Foreground="{DynamicResource TertiaryBrush}" HorizontalAlignment="Right"
+                     VerticalAlignment="Center" TextTrimming="CharacterEllipsis" Margin="10,0,4,0" />
+        </DockPanel>
+      </Border>
+
+      <Grid Background="{DynamicResource BackgroundBrush}">
+        <ContentControl x:Name="TerminalHost" Focusable="False" />
+        <StackPanel x:Name="NoSession" VerticalAlignment="Center" HorizontalAlignment="Center" Visibility="Collapsed">
+          <TextBlock Text="&#xE756;" FontFamily="{StaticResource IconFont}" FontSize="36" HorizontalAlignment="Center"
+                     Foreground="{DynamicResource TertiaryBrush}" />
+          <TextBlock Text="No session" FontSize="17" FontWeight="SemiBold" HorizontalAlignment="Center" Margin="0,10,0,4" />
+          <TextBlock Text="Press Ctrl+Shift+T to start one." Style="{StaticResource Caption}" HorizontalAlignment="Center" />
+        </StackPanel>
+      </Grid>
+    </DockPanel>
+
+    <GridSplitter x:Name="FilesSplitter" Grid.Column="3" Style="{StaticResource Divider}" ResizeBehavior="PreviousAndNext" ResizeDirection="Columns" />
+    <local:FilePanel x:Name="Files" Grid.Column="4" />
+  </Grid>
+</Window>

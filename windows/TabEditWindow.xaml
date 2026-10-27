@@ -1,0 +1,57 @@
+<Window x:Class="Omux.TabEditWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="Edit Session" Width="480" SizeToContent="Height" ResizeMode="NoResize" ShowInTaskbar="False"
+        WindowStartupLocation="CenterOwner" Background="{DynamicResource ChromeBrush}" Foreground="{DynamicResource ForegroundBrush}">
+  <Grid Margin="20">
+    <Grid.ColumnDefinitions>
+      <ColumnDefinition Width="Auto" />
+      <ColumnDefinition Width="*" />
+    </Grid.ColumnDefinitions>
+    <Grid.RowDefinitions>
+      <RowDefinition Height="Auto" />
+      <RowDefinition Height="Auto" />
+      <RowDefinition Height="Auto" />
+      <RowDefinition Height="Auto" />
+      <RowDefinition Height="Auto" />
+      <RowDefinition Height="Auto" />
+    </Grid.RowDefinitions>
+
+    <TextBlock Text="Name" VerticalAlignment="Center" Margin="0,0,12,0" />
+    <TextBox x:Name="NameBox" Grid.Column="1" Margin="0,4" />
+
+    <TextBlock Grid.Row="1" Text="Folder" VerticalAlignment="Center" Margin="0,0,12,0" />
+    <DockPanel Grid.Row="1" Grid.Column="1" Margin="0,4">
+      <Button DockPanel.Dock="Right" Content="Choose…" Click="Choose_Click" Margin="8,0,0,0" />
+      <Grid>
+        <TextBox x:Name="FolderBox" />
+        <TextBlock x:Name="FolderPrompt" IsHitTestVisible="False" Margin="12,0" VerticalAlignment="Center"
+                   Foreground="{DynamicResource TertiaryBrush}" />
+      </Grid>
+    </DockPanel>
+
+    <TextBlock Grid.Row="2" Text="Command" VerticalAlignment="Center" Margin="0,0,12,0" />
+    <ComboBox x:Name="ModeBox" Grid.Row="2" Grid.Column="1" Margin="0,4" SelectionChanged="ModeBox_SelectionChanged">
+      <ComboBoxItem Content="Project default" />
+      <ComboBoxItem Content="Plain shell" />
+      <ComboBoxItem Content="Custom" />
+    </ComboBox>
+
+    <StackPanel Grid.Row="3" Grid.Column="1" Margin="0,2,0,4">
+      <TextBox x:Name="CustomBox" />
+      <TextBlock x:Name="InheritHint" Style="{StaticResource Caption}" />
+    </StackPanel>
+
+    <TextBlock Grid.Row="4" Text="Claude session" Margin="0,8,12,0" />
+    <StackPanel Grid.Row="4" Grid.Column="1" Margin="0,8,0,0">
+      <TextBox x:Name="SessionBox" IsReadOnly="True" BorderThickness="0" Background="Transparent" Padding="0"
+               FontFamily="Cascadia Mono, Consolas" FontSize="11" Foreground="{DynamicResource SecondaryBrush}" />
+      <Button Content="Start a fresh conversation on next restart" Click="Fresh_Click" HorizontalAlignment="Left" Margin="0,6,0,0" FontSize="12" />
+    </StackPanel>
+
+    <StackPanel Grid.Row="5" Grid.ColumnSpan="2" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,20,0,0">
+      <Button Content="Cancel" IsCancel="True" MinWidth="80" Margin="0,0,8,0" />
+      <Button Content="Save" IsDefault="True" MinWidth="80" Click="Save_Click" Style="{DynamicResource AccentButtonStyle}" />
+    </StackPanel>
+  </Grid>
+</Window>

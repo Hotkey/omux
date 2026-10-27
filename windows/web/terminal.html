@@ -1,0 +1,23 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <link rel="stylesheet" href="vendor/xterm.css">
+  <style>
+    html, body { margin: 0; height: 100%; overflow: hidden; background: var(--bg, #1C1C1F); }
+    #root { position: absolute; inset: 0 0 0 6px; }
+    .term { position: absolute; inset: 4px 0 0 0; display: none; }
+    .term.visible { display: block; }
+    .xterm .xterm-viewport { scrollbar-width: thin; scrollbar-color: rgba(128, 128, 128, .35) transparent; }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+  <script src="vendor/xterm.js"></script>
+  <script src="vendor/addon-fit.js"></script>
+  <script src="vendor/addon-web-links.js"></script>
+  <script src="vendor/addon-webgl.js"></script>
+  <script src="vendor/addon-unicode11.js"></script>
+  <script src="terminal.js"></script>
+</body>
+</html>
