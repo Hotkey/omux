@@ -2,6 +2,8 @@
 
 A native macOS terminal for running many [Claude Code](https://claude.com/claude-code) sessions side by side. Sessions are grouped into projects in a sidebar, each one keeps its own Claude conversation across relaunches, and a files panel previews whatever the session is working on.
 
+![omux with three projects in the sidebar, a Claude Code session editing a settings page, and the files panel previewing a Markdown plan](docs/screenshot.png)
+
 Built with SwiftUI and [SwiftTerm](https://github.com/migueldeicaza/SwiftTerm).
 
 ## Features
