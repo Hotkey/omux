@@ -225,14 +225,15 @@ final class Store: ObservableObject {
     /// Rescans the selected session's scrollback for file paths and local URLs (background, cheap).
     func scanMentionedPaths() {
         guard let id = selectedTabID, let view = terminals[id] else { mentionedPaths = []; mentionedURLs = []; return }
-        Task.detached { [weak self] in
-            let paths = view.mentionedPaths()
-            let urls = view.mentionedLocalURLs()
-            await MainActor.run { [weak self] in
-                guard let self, self.selectedTabID == id else { return }
-                if self.mentionedPaths != paths { self.mentionedPaths = paths }
-                if self.mentionedURLs != urls { self.mentionedURLs = urls }
-            }
+        // Read the buffer on the main actor; match and check files off it.
+        let text = view.scrollbackText()
+        Task { [weak self] in
+            let (paths, urls) = await Task.detached {
+                (TermView.mentionedPaths(in: text), TermView.mentionedLocalURLs(in: text))
+            }.value
+            guard let self, self.selectedTabID == id else { return }
+            if self.mentionedPaths != paths { self.mentionedPaths = paths }
+            if self.mentionedURLs != urls { self.mentionedURLs = urls }
         }
     }
 

@@ -94,7 +94,7 @@ final class TermView: LocalProcessTerminalView {
         }
     }
 
-    static func filePath(from link: String) -> String? {
+    nonisolated static func filePath(from link: String) -> String? {
         var raw = link.trimmingCharacters(in: .whitespaces)
         if raw.hasPrefix("file://"), let url = URL(string: raw) { raw = url.path }
         guard raw.hasPrefix("/") || raw.hasPrefix("~") else { return nil }
@@ -115,10 +115,14 @@ final class TermView: LocalProcessTerminalView {
         }
     }
 
-    /// Local server URLs (localhost, 127.0.0.1, …) in the scrollback, oldest first.
-    func mentionedLocalURLs() -> [String] {
-        let data = getBufferAsData(kind: .normal)
-        guard let text = String(data: data, encoding: .utf8) else { return [] }
+    /// The main buffer's text, scrollback included. Read it here on the main actor;
+    /// the parsers below are safe to run on the copy from any thread.
+    func scrollbackText() -> String {
+        String(data: getBufferAsData(kind: .normal), encoding: .utf8) ?? ""
+    }
+
+    /// Local server URLs (localhost, 127.0.0.1, …) in `text`, oldest first.
+    nonisolated static func mentionedLocalURLs(in text: String) -> [String] {
         let regex = try! NSRegularExpression(pattern: #"https?://(?:localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1\])(?::\d+)?(?:/[^\s'"<>)\]]*)?"#)
         var result: [String] = []
         for match in regex.matches(in: text, range: NSRange(text.startIndex..., in: text)) {
@@ -131,10 +135,8 @@ final class TermView: LocalProcessTerminalView {
         return result
     }
 
-    /// File paths that appear in the scrollback and still exist, oldest first.
-    func mentionedPaths() -> [String] {
-        let data = getBufferAsData(kind: .normal)
-        guard let text = String(data: data, encoding: .utf8) else { return [] }
+    /// File paths that appear in `text` and still exist, oldest first.
+    nonisolated static func mentionedPaths(in text: String) -> [String] {
         let regex = try! NSRegularExpression(pattern: #"(?<![\w])(?:~|/)[\w.+@%~/-]+"#)
         var seen = Set<String>()
         var result: [String] = []
