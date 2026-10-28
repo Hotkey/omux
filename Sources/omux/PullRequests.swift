@@ -137,13 +137,19 @@ final class PullRequestMonitor: ObservableObject {
             return result.err.contains("no pull requests found") ? .none : .unknown
         }
         guard let raw = try? JSONDecoder().decode(Raw.self, from: Data(result.out.utf8)),
-              let url = URL(string: raw.url), let state = PullRequest.State(rawValue: raw.state) else { return .unknown }
+              let url = webURL(raw.url), let state = PullRequest.State(rawValue: raw.state) else { return .unknown }
         let checks = (raw.statusCheckRollup ?? []).enumerated().map { index, check in
             PullRequest.Check(id: index, name: check.name ?? check.context ?? "Check",
-                              result: check.result, url: (check.detailsUrl ?? check.targetUrl).flatMap(URL.init(string:)))
+                              result: check.result, url: (check.detailsUrl ?? check.targetUrl).flatMap(webURL))
         }
         return .found(PullRequest(number: raw.number, title: raw.title, url: url, state: state, isDraft: raw.isDraft,
                                   review: raw.reviewDecision.flatMap(PullRequest.Review.init(rawValue:)), checks: checks))
+    }
+
+    /// Only web links: these open on click, and check links come from whoever reports the check.
+    nonisolated private static func webURL(_ string: String) -> URL? {
+        guard let url = URL(string: string), ["http", "https"].contains(url.scheme?.lowercased()) else { return nil }
+        return url
     }
 
     /// `gh pr view --json` output. Checks come as CheckRuns (status and conclusion) or
