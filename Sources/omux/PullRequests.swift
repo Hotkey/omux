@@ -226,14 +226,16 @@ struct PullRequestChip: View {
             .fixedSize()
             .help("Pull request #\(pr.number): \(pr.title)")
             .popover(isPresented: $open, arrowEdge: .bottom) {
-                PullRequestDetails(pr: pr) { open = false }
+                PullRequestDetails(pr: pr, tabID: tabID) { open = false }
             }
         }
     }
 }
 
 struct PullRequestDetails: View {
+    @EnvironmentObject var store: Store
     let pr: PullRequest
+    let tabID: UUID
     let dismiss: () -> Void
 
     private var facts: String {
@@ -276,6 +278,19 @@ struct PullRequestDetails: View {
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            if pr.state == .merged {
+                Button {
+                    dismiss()
+                    store.cleanUpMergedWorktree(tabID)
+                } label: {
+                    Label("Delete Worktree and Branch…", systemImage: "trash")
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(.horizontal, 8)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .padding(.top, 4)
+            }
         }
         .font(.system(size: 11))
         .padding(.vertical, 8)
