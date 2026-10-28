@@ -73,6 +73,10 @@ Local files omux touches:
 
 omux is an independent project and is not affiliated with or endorsed by Anthropic. Claude and Claude Code are trademarks of Anthropic.
 
+## Changelog
+
+See [CHANGELOG.md](CHANGELOG.md) for what changed in each version.
+
 ## License
 
 [MIT](LICENSE)
