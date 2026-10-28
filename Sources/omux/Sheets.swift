@@ -162,6 +162,7 @@ struct GroupEditSheet: View {
     @State private var name = ""
     @State private var directory = ""
     @State private var command = ""
+    @State private var useWorktrees = false
 
     var body: some View {
         Form {
@@ -173,6 +174,7 @@ struct GroupEditSheet: View {
             TextField("Command for new sessions", text: $command, prompt: Text("leave empty for a plain shell"))
             Text("Applies when a session starts. Existing sessions keep running.")
                 .font(.caption).foregroundStyle(.secondary)
+            Toggle("Give new sessions their own Git worktree", isOn: $useWorktrees)
             HStack {
                 Spacer()
                 Button("Cancel") { dismiss() }.keyboardShortcut(.cancelAction)
@@ -186,6 +188,7 @@ struct GroupEditSheet: View {
             name = group.name
             directory = group.directory ?? ""
             command = group.command ?? ""
+            useWorktrees = group.useWorktrees
         }
     }
 
@@ -194,6 +197,7 @@ struct GroupEditSheet: View {
             group.name = name.trimmingCharacters(in: .whitespaces).isEmpty ? group.name : name
             group.directory = directory.isEmpty ? nil : directory
             group.command = command
+            group.useWorktrees = useWorktrees
         }
         dismiss()
     }

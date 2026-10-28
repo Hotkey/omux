@@ -7,7 +7,8 @@ enum TermEvent {
     case title(String)
     case directory(String?)
     case exited
-    case status(TabRuntime.StatusState?, String?)
+    /// OSC 7501: the root record's state, kind and message, plus every other record.
+    case status(TabRuntime.StatusState?, kind: String?, message: String?, children: [TabRuntime.StatusChild])
     /// ⌘-click on a file path in the output.
     case openPath(String)
 }
@@ -38,12 +39,16 @@ private final class ProcessEvents: LocalProcessTerminalViewDelegate {
     }
 
     func programStatusChanged(source: TerminalView, records: [TerminalProgramStatus]) {
+        let children = records.filter { !$0.id.isEmpty }.map {
+            TabRuntime.StatusChild(id: $0.id, state: TabRuntime.StatusState(rawValue: $0.state.rawValue),
+                                   kind: $0.kind?.rawValue, message: $0.message, title: $0.title)
+        }
         guard let root = records.first(where: { $0.id.isEmpty }) ?? records.last else {
-            owner?.emit(.status(nil, nil))
+            owner?.emit(.status(nil, kind: nil, message: nil, children: []))
             return
         }
         let state = TabRuntime.StatusState(rawValue: root.state.rawValue)
-        owner?.emit(.status(state, root.kind?.rawValue ?? root.message))
+        owner?.emit(.status(state, kind: root.kind?.rawValue, message: root.message, children: children))
     }
 }
 
@@ -99,6 +104,31 @@ final class TermView: LocalProcessTerminalView {
         var isDir: ObjCBool = false
         guard FileManager.default.fileExists(atPath: path, isDirectory: &isDir), !isDir.boolValue else { return nil }
         return path
+    }
+
+    /// Types text into the session as a paste, so newlines don't submit it early.
+    func paste(_ text: String) {
+        if terminalInputStateSnapshot()?.bracketedPasteMode == true {
+            send(txt: "\u{1b}[200~" + text + "\u{1b}[201~")
+        } else {
+            send(txt: text)
+        }
+    }
+
+    /// Local server URLs (localhost, 127.0.0.1, …) in the scrollback, oldest first.
+    func mentionedLocalURLs() -> [String] {
+        let data = getBufferAsData(kind: .normal)
+        guard let text = String(data: data, encoding: .utf8) else { return [] }
+        let regex = try! NSRegularExpression(pattern: #"https?://(?:localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1\])(?::\d+)?(?:/[^\s'"<>)\]]*)?"#)
+        var result: [String] = []
+        for match in regex.matches(in: text, range: NSRange(text.startIndex..., in: text)) {
+            guard let range = Range(match.range, in: text) else { continue }
+            var url = String(text[range])
+            while let last = url.last, ".,:;".contains(last) { url.removeLast() }
+            result.removeAll { $0 == url }
+            result.append(url)
+        }
+        return result
     }
 
     /// File paths that appear in the scrollback and still exist, oldest first.

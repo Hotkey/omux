@@ -93,28 +93,51 @@ struct Sidebar: View {
 
 struct TabRow: View {
     @EnvironmentObject var store: Store
+    @ObservedObject private var monitor = AgentMonitor.shared
     let tab: TabItem
     @State private var hovering = false
     @AppStorage(Prefs.showFolderPath) private var showFolderPath = true
 
+    /// "2 agents" while subagents run; the selected session lists them instead.
+    private var agentCount: String? {
+        guard store.selectedTabID != tab.id else { return nil }
+        let running = (monitor.agents[tab.id] ?? []).filter { !$0.finished }.count
+        return running > 0 ? "\(running) agent\(running == 1 ? "" : "s")" : nil
+    }
+
     var body: some View {
         let rt = store.runtime[tab.id] ?? TabRuntime()
-        HStack(spacing: 8) {
+        // Top-aligned so the dot stays beside the name when agent rows or buttons follow.
+        HStack(alignment: .top, spacing: 8) {
             Circle()
                 .fill(rt.statusColor ?? tab.color.color ?? Color.secondary.opacity(0.35))
                 .frame(width: 8, height: 8)
+                .padding(.top, 5)
             VStack(alignment: .leading, spacing: 1) {
                 if store.renamingID == tab.id {
                     RenameField(initial: tab.name) { store.rename(tab.id, to: $0) }
                 } else {
                     Text(tab.name).lineLimit(1)
                 }
-                if let line = rt.statusLine(showFolder: showFolderPath) {
+                if let worktree = tab.worktree {
+                    HStack(spacing: 3) {
+                        Image(systemName: "arrow.triangle.branch").imageScale(.small)
+                        Text(([worktree.branch, rt.statusLine(showFolder: false), agentCount].compactMap { $0 })
+                            .joined(separator: " · "))
+                    }
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                } else if let line = [rt.statusLine(showFolder: showFolderPath), agentCount].compactMap({ $0 }).joined(separator: " · ").nilIfEmpty {
                     Text(line)
                         .font(.caption)
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
                 }
+                if rt.awaitsPermission {
+                    PermissionButtons(tabID: tab.id).padding(.top, 3)
+                }
+                AgentRows(tabID: tab.id, selected: store.selectedTabID == tab.id)
             }
             Spacer(minLength: 4)
             if hovering {
@@ -228,11 +251,19 @@ struct TabMenu: View {
                 }
             }
         }
+        if let worktree = tab.worktree {
+            Divider()
+            Button("Create Pull Request…") { store.createPullRequest(tab.id) }
+            Button("Merge into \(worktree.base)") { store.mergeWorktree(tab.id) }
+            Button("Open Worktree in Finder") {
+                if let dir = store.directory(of: tab) { NSWorkspace.shared.open(URL(fileURLWithPath: dir)) }
+            }
+        }
         Divider()
         Button("Interrupt (Ctrl-C)") { store.stop(tab.id) }
         Button("Restart Session") { store.restart(tab.id) }
         Button("Kill Session") { store.kill(tab.id) }
-        Button("Close Session", role: .destructive) { store.closeTab(tab.id) }
+        Button("Close Session", role: .destructive) { store.requestClose(tab.id) }
     }
 }
 
@@ -242,6 +273,7 @@ struct GroupMenu: View {
 
     var body: some View {
         Button("New Session") { store.newTab(in: group.id) }
+        Button("New Session in Worktree…") { store.newWorktreeGroupID = group.id }
         Button("New Shell") { store.newTab(in: group.id, command: "") }
         Divider()
         Button("Rename") { store.renamingID = group.id }
@@ -254,4 +286,8 @@ struct GroupMenu: View {
         Divider()
         Button("Delete Project", role: .destructive) { store.deleteGroup(group.id) }
     }
+}
+
+extension String {
+    var nilIfEmpty: String? { isEmpty ? nil : self }
 }
