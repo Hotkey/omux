@@ -393,6 +393,7 @@ final class Store: ObservableObject {
         case .openPath(let path):
             previewRequest = path
         case .status(let state, let kind, let message, let children):
+            let previous = runtime[id]?.statusState
             update(id) {
                 $0.statusState = state
                 $0.statusKind = kind
@@ -400,7 +401,42 @@ final class Store: ObservableObject {
                 $0.statusChildren = children
                 if state == .blocked || state == .done, !isWatching(id) { $0.needsAttention = true }
             }
+            if state != previous { notifyStatusChange(id) }
+        case .notification(let title, let body):
+            guard !isWatching(id) else { return }
+            update(id) { $0.needsAttention = true }
+            if UserDefaults.standard.object(forKey: Prefs.notifyPrograms) as? Bool ?? true {
+                notify(id, subtitle: title, body: body)
+            }
         }
+    }
+
+    /// Notifies when a session you aren't looking at starts waiting on you, or finishes.
+    /// Only on a change of state, so a session that stays blocked notifies once.
+    private func notifyStatusChange(_ id: UUID) {
+        guard !isWatching(id), let rt = runtime[id], let state = rt.statusState else { return }
+        let enabled: Bool
+        switch state {
+        case .blocked: enabled = UserDefaults.standard.object(forKey: Prefs.notifyNeedsYou) as? Bool ?? true
+        case .done, .error: enabled = UserDefaults.standard.bool(forKey: Prefs.notifyDone)
+        case .idle, .working: enabled = false
+        }
+        guard enabled, let line = rt.statusLine(showFolder: false) else { return }
+        notify(id, body: line)
+    }
+
+    /// The session's name as the title, its project (or the program's own title) under it.
+    private func notify(_ id: UUID, subtitle: String? = nil, body: String) {
+        guard let tab = tab(id) else { return }
+        Notifier.shared.post(tabID: id, title: tab.name, subtitle: subtitle ?? group(containing: id)?.name, body: body)
+    }
+
+    /// Brings omux forward on a session, e.g. from a click on its notification.
+    func reveal(_ id: UUID) {
+        guard tab(id) != nil else { return }
+        AppDelegate.openWindow?(id: "main")
+        NSApp.activate()
+        selectedTabID = id
     }
 
     private func isWatching(_ id: UUID) -> Bool {
@@ -409,6 +445,7 @@ final class Store: ObservableObject {
 
     private func clearAttention(_ id: UUID) {
         update(id) { $0.hasActivity = false; $0.needsAttention = false }
+        Notifier.shared.clear(tabID: id)
     }
 
     private func update(_ id: UUID, _ mutate: (inout TabRuntime) -> Void) {
@@ -452,6 +489,7 @@ final class Store: ObservableObject {
             view.removeFromSuperview()
         }
         runtime[id] = nil
+        Notifier.shared.clear(tabID: id)
         browsers.removeValue(forKey: id)?.close()
         if openAgent?.tabID == id { openAgent = nil }
         groups[loc.group].tabs.remove(at: loc.tab)

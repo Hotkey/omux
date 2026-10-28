@@ -33,6 +33,9 @@ enum Prefs {
     static let panelTab = "panelTab"
     static let fontFamily = "fontFamily"
     static let fontSize = "fontSize"
+    static let notifyNeedsYou = "notifyNeedsYou"
+    static let notifyDone = "notifyDone"
+    static let notifyPrograms = "notifyPrograms"
 }
 
 struct SettingsView: View {
@@ -44,6 +47,9 @@ struct SettingsView: View {
     @AppStorage(Prefs.fontSize) private var fontSize = 13.0
     @AppStorage(Prefs.autoResume) private var autoResume = false
     @AppStorage(Prefs.previewWrapLines) private var wrapLines = true
+    @AppStorage(Prefs.notifyNeedsYou) private var notifyNeedsYou = true
+    @AppStorage(Prefs.notifyDone) private var notifyDone = false
+    @AppStorage(Prefs.notifyPrograms) private var notifyPrograms = true
 
     var body: some View {
         Form {
@@ -76,6 +82,14 @@ struct SettingsView: View {
                     .foregroundStyle(.secondary)
                 Toggle("Confirm before quitting while sessions are running", isOn: $confirmQuit)
                 Text("Quitting always stops every session. Claude conversations resume on the next launch.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+            Section("Notifications") {
+                Toggle("When a session needs you", isOn: $notifyNeedsYou)
+                Toggle("When a session finishes", isOn: $notifyDone)
+                Toggle("When a program in a session sends one", isOn: $notifyPrograms)
+                Text("Only for sessions you aren't looking at. Programs send them with OSC 9 or OSC 777: set Claude Code's notification channel to ghostty (/config) to get its plugins' notifications too.")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
@@ -288,6 +302,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.servicesProvider = services
         NSUpdateDynamicServices()
+        Notifier.shared.activate()
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { false }
