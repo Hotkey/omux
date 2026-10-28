@@ -133,7 +133,8 @@ struct ContentView: View {
             }
             .ignoresSafeArea(.container, edges: .top)
         }
-        .toolbar(.hidden, for: .windowToolbar)
+        // Hiding the toolbar itself also hides the window buttons on some macOS versions.
+        .toolbarBackground(.hidden, for: .windowToolbar)
         .preferredColorScheme(theme.colorScheme)
         .background(Color(nsColor: theme.chrome))
         .onChange(of: themeName) { _, _ in store.applyAppearance() }

@@ -2,6 +2,13 @@
 
 All notable changes to omux are listed here. Versions follow [Semantic Versioning](https://semver.org).
 
+## [Unreleased]
+
+### Fixed
+
+- The window's close, minimize and full screen buttons were missing on some macOS versions.
+- Scanning a session's output for file paths and local URLs read the terminal from a background thread ([#1](https://github.com/onurozcan/omux/issues/1)).
+
 ## [0.2.0] - 2026-10-28
 
 ### Added
@@ -28,5 +35,6 @@ First public release.
 - Recent Claude conversations (⇧⌘O), Claude plan usage limits in the sidebar, themes, terminal font settings and a quick switcher (⌘K).
 - Open folders from Finder's "Open in omux" service, the Dock icon or `open -a omux <folder>`.
 
+[Unreleased]: https://github.com/onurozcan/omux/compare/v0.2.0...HEAD
 [0.2.0]: https://github.com/onurozcan/omux/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/onurozcan/omux/releases/tag/v0.1.0
