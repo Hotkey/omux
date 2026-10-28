@@ -141,6 +141,13 @@ struct TabRow: View {
                 if rt.awaitsPermission {
                     PermissionButtons(tabID: tab.id).padding(.top, 3)
                 }
+                if pulls.requests[tab.id]?.state == .merged {
+                    Button("Delete Worktree") { store.cleanUpMergedWorktree(tab.id) }
+                        .buttonStyle(.bordered)
+                        .controlSize(.small)
+                        .help("The pull request was merged. Close this session and delete its worktree and branch.")
+                        .padding(.top, 3)
+                }
                 AgentRows(tabID: tab.id, selected: store.selectedTabID == tab.id)
             }
             Spacer(minLength: 4)
@@ -260,6 +267,9 @@ struct TabMenu: View {
             Divider()
             if let pr = pulls.requests[tab.id], pr.state == .open {
                 Button("Open Pull Request #\(pr.number)") { NSWorkspace.shared.open(pr.url) }
+            } else if let pr = pulls.requests[tab.id], pr.state == .merged {
+                Button("Delete Merged Worktree…") { store.cleanUpMergedWorktree(tab.id) }
+                    .help("#\(pr.number) was merged")
             } else {
                 Button("Create Pull Request…") { store.createPullRequest(tab.id) }
             }

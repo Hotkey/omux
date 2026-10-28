@@ -48,9 +48,15 @@ extension Store {
 
         let alert = NSAlert()
         alert.messageText = "Close “\(tab.name)”?"
-        alert.informativeText = facts.isEmpty
-            ? "Its worktree on “\(worktree.branch)” has nothing that isn't already in \(worktree.base)."
-            : "Its worktree on “\(worktree.branch)” has \(facts.joined(separator: " and "))."
+        if let pr = PullRequestMonitor.shared.requests[id], pr.state == .merged {
+            // A squash or rebase merge leaves the branch's commits "not in" the base.
+            alert.informativeText = "Its pull request #\(pr.number) was merged."
+                + (dirty > 0 ? " The worktree has \(dirty) uncommitted file\(dirty == 1 ? "" : "s")." : "")
+        } else {
+            alert.informativeText = facts.isEmpty
+                ? "Its worktree on “\(worktree.branch)” has nothing that isn't already in \(worktree.base)."
+                : "Its worktree on “\(worktree.branch)” has \(facts.joined(separator: " and "))."
+        }
         alert.addButton(withTitle: "Keep Worktree")
         let delete = alert.addButton(withTitle: "Delete Worktree and Branch")
         delete.hasDestructiveAction = true
@@ -60,14 +66,38 @@ extension Store {
             closeTab(id)
         case .alertSecondButtonReturn:
             closeTab(id)
-            Task.detached {
-                let result = Git.removeWorktree(worktree, path: path)
-                if !result.ok {
-                    await MainActor.run { Self.showError("Couldn't delete the worktree", result.message) }
-                }
-            }
+            deleteWorktree(worktree, path: path)
         default:
             break
+        }
+    }
+
+    /// Offered once the session's pull request is merged: closes the session and deletes
+    /// its worktree and local branch.
+    func cleanUpMergedWorktree(_ id: UUID) {
+        guard let tab = tab(id), let worktree = tab.worktree, let path = directory(of: tab),
+              FileManager.default.fileExists(atPath: path) else { return }
+        let dirty = Git.run(["status", "--porcelain"], in: path).out.split(separator: "\n").count
+        let number = PullRequestMonitor.shared.requests[id].map { " in #\($0.number)" } ?? ""
+
+        let alert = NSAlert()
+        alert.messageText = "Delete the worktree for “\(tab.name)”?"
+        alert.informativeText = "“\(worktree.branch)” was merged\(number). This closes the session and deletes its worktree and local branch."
+            + (dirty > 0 ? " \(dirty) uncommitted file\(dirty == 1 ? "" : "s") will be lost." : "")
+        let delete = alert.addButton(withTitle: "Delete Worktree and Branch")
+        delete.hasDestructiveAction = true
+        alert.addButton(withTitle: "Cancel")
+        guard alert.runModal() == .alertFirstButtonReturn else { return }
+        closeTab(id)
+        deleteWorktree(worktree, path: path)
+    }
+
+    private func deleteWorktree(_ worktree: Worktree, path: String) {
+        Task.detached {
+            let result = Git.removeWorktree(worktree, path: path)
+            if !result.ok {
+                await MainActor.run { Self.showError("Couldn't delete the worktree", result.message) }
+            }
         }
     }
 
