@@ -407,6 +407,12 @@ final class Store: ObservableObject {
         selectedTabID == id && NSApp.isActive && NSApp.keyWindow != nil
     }
 
+    /// Flags a session for something that happened outside its terminal, like its pull
+    /// request's checks failing.
+    func requestAttention(_ id: UUID) {
+        if !isWatching(id) { update(id) { $0.needsAttention = true } }
+    }
+
     private func clearAttention(_ id: UUID) {
         update(id) { $0.hasActivity = false; $0.needsAttention = false }
     }

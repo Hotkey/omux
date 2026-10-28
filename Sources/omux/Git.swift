@@ -53,6 +53,19 @@ enum Git {
 
     static func quote(_ s: String) -> String { "'" + s.replacingOccurrences(of: "'", with: "'\\''") + "'" }
 
+    /// Where the login shell finds gh, looked up once so polling doesn't start a shell
+    /// each time. nil when gh isn't installed.
+    static let ghPath: String? = {
+        let path = login("command -v gh", in: NSHomeDirectory()).out.trimmingCharacters(in: .whitespacesAndNewlines)
+        return path.hasPrefix("/") ? path : nil
+    }()
+
+    /// Runs the GitHub CLI, or returns nil when it isn't installed.
+    static func gh(_ args: [String], in dir: String) -> Result? {
+        guard let ghPath else { return nil }
+        return exec(ghPath, args, in: dir, env: ["GH_PROMPT_DISABLED": "1", "GIT_TERMINAL_PROMPT": "0"])
+    }
+
     // MARK: Repository facts
 
     static func topLevel(_ dir: String) -> String? {
