@@ -11,6 +11,8 @@ enum TermEvent {
     case status(TabRuntime.StatusState?, kind: String?, message: String?, children: [TabRuntime.StatusChild])
     /// ⌘-click on a file path in the output.
     case openPath(String)
+    /// A desktop notification the program asked for (OSC 9 or OSC 777).
+    case notification(title: String?, body: String)
 }
 
 /// Receives process callbacks on behalf of a TermView. Kept separate because
@@ -56,6 +58,7 @@ final class TermView: LocalProcessTerminalView {
     let tabID: UUID
     var onEvent: ((TermEvent) -> Void)?
     private let events = ProcessEvents()
+    private var oscObservation: TerminalOscObservation?
 
     init(tabID: UUID) {
         self.tabID = tabID
@@ -65,6 +68,11 @@ final class TermView: LocalProcessTerminalView {
         events.owner = self
         processDelegate = events
         apply(Theme.current)
+        // Observed, not handled, so SwiftTerm keeps drawing OSC 9;4 progress itself.
+        oscObservation = observeOscEvents { [weak self] event in
+            guard let note = Self.notification(code: event.code, payload: event.payload) else { return }
+            Task { @MainActor in self?.emit(.notification(title: note.title, body: note.body)) }
+        }
     }
 
     required init?(coder: NSCoder) { fatalError("not supported") }
@@ -119,6 +127,25 @@ final class TermView: LocalProcessTerminalView {
     /// the parsers below are safe to run on the copy from any thread.
     func scrollbackText() -> String {
         String(data: getBufferAsData(kind: .normal), encoding: .utf8) ?? ""
+    }
+
+    /// A desktop notification in an OSC payload: `OSC 9 ; body` (iTerm2) or
+    /// `OSC 777 ; notify ; title ; body` (Ghostty, rxvt). Claude Code sends these when its
+    /// notification channel is `iterm2` or `ghostty`, for itself and for its plugins.
+    nonisolated static func notification(code: Int, payload: [UInt8]) -> (title: String?, body: String)? {
+        guard let text = String(bytes: payload, encoding: .utf8) else { return nil }
+        switch code {
+        case 9:
+            // A number first is a ConEmu command, like 9;4 progress, not a message.
+            guard !text.isEmpty, text.range(of: #"^\d+(;|$)"#, options: .regularExpression) == nil else { return nil }
+            return (nil, text)
+        case 777:
+            let parts = text.split(separator: ";", maxSplits: 2, omittingEmptySubsequences: false)
+            guard parts.count == 3, parts[0] == "notify", !parts[2].isEmpty else { return nil }
+            return (parts[1].isEmpty ? nil : String(parts[1]), String(parts[2]))
+        default:
+            return nil
+        }
     }
 
     /// Local server URLs (localhost, 127.0.0.1, …) in `text`, oldest first.
