@@ -182,6 +182,7 @@ struct SessionHeader: View {
                 Spacer()
                 AgentPill(tabID: tab.id)
                 if let worktree = tab.worktree {
+                    PullRequestChip(tabID: tab.id)
                     BranchChip(tabID: tab.id, worktree: worktree)
                 } else if let cwd = rt.cwd {
                     Text((cwd as NSString).abbreviatingWithTildeInPath)

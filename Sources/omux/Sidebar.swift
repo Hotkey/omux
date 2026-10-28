@@ -94,6 +94,7 @@ struct Sidebar: View {
 struct TabRow: View {
     @EnvironmentObject var store: Store
     @ObservedObject private var monitor = AgentMonitor.shared
+    @ObservedObject private var pulls = PullRequestMonitor.shared
     let tab: TabItem
     @State private var hovering = false
     @AppStorage(Prefs.showFolderPath) private var showFolderPath = true
@@ -124,6 +125,9 @@ struct TabRow: View {
                         Image(systemName: "arrow.triangle.branch").imageScale(.small)
                         Text(([worktree.branch, rt.statusLine(showFolder: false), agentCount].compactMap { $0 })
                             .joined(separator: " · "))
+                        if let pr = pulls.requests[tab.id] {
+                            PullRequestBadge(pr: pr).layoutPriority(1)
+                        }
                     }
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -233,6 +237,7 @@ struct RenameField: View {
 
 struct TabMenu: View {
     @EnvironmentObject var store: Store
+    @ObservedObject private var pulls = PullRequestMonitor.shared
     let tab: TabItem
     let groupID: UUID
 
@@ -253,7 +258,11 @@ struct TabMenu: View {
         }
         if let worktree = tab.worktree {
             Divider()
-            Button("Create Pull Request…") { store.createPullRequest(tab.id) }
+            if let pr = pulls.requests[tab.id], pr.state == .open {
+                Button("Open Pull Request #\(pr.number)") { NSWorkspace.shared.open(pr.url) }
+            } else {
+                Button("Create Pull Request…") { store.createPullRequest(tab.id) }
+            }
             Button("Merge into \(worktree.base)") { store.mergeWorktree(tab.id) }
             Button("Open Worktree in Finder") {
                 if let dir = store.directory(of: tab) { NSWorkspace.shared.open(URL(fileURLWithPath: dir)) }
