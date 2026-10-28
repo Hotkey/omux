@@ -470,6 +470,7 @@ struct AgentPill: View {
                 .contentShape(Capsule())
             }
             .buttonStyle(.plain)
+            .fixedSize()
             .help("Subagents in this session")
             .popover(isPresented: $open, arrowEdge: .bottom) {
                 AgentList(tabID: tabID) { open = false }

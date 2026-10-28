@@ -277,6 +277,7 @@ struct BranchChip: View {
             .contentShape(Capsule())
         }
         .buttonStyle(.plain)
+        .fixedSize()
         .help("Changes on \(worktree.branch) since \(worktree.base) (⌥⌘2)")
     }
 }

@@ -146,7 +146,11 @@ final class Store: ObservableObject {
     private func makeTerminal(tab: TabItem, group: TabGroup, command: String? = nil) -> TermView {
         let view = TermView(tabID: tab.id)
         terminals[tab.id] = view
-        view.onEvent = { [weak self] event in self?.handle(event, for: tab.id) }
+        // A replaced view (restart) still reports its exit; only the current one may update the tab.
+        view.onEvent = { [weak self, weak view] event in
+            guard let self, let view, self.terminals[tab.id] === view else { return }
+            self.handle(event, for: tab.id)
+        }
         launch(view, tab: tab, group: group, command: command)
         return view
     }
