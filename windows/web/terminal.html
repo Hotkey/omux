@@ -8,16 +8,48 @@
     #root { position: absolute; inset: 0 0 0 6px; }
     .term { position: absolute; inset: 4px 0 0 0; display: none; }
     .term.visible { display: block; }
-    .xterm .xterm-viewport { scrollbar-width: thin; scrollbar-color: rgba(128, 128, 128, .35) transparent; }
+    /* Thin overlay-style scrollbar without the classic arrow buttons. */
+    .xterm .xterm-viewport::-webkit-scrollbar { width: 10px; }
+    .xterm .xterm-viewport::-webkit-scrollbar-button { display: none; }
+    .xterm .xterm-viewport::-webkit-scrollbar-track { background: transparent; }
+    .xterm .xterm-viewport::-webkit-scrollbar-thumb { background: rgba(128, 128, 128, .3); border-radius: 5px; border: 3px solid transparent; background-clip: content-box; }
+    .xterm .xterm-viewport::-webkit-scrollbar-thumb:hover { background-color: rgba(128, 128, 128, .55); }
+
+    /* Find bar, top right of the visible terminal. */
+    #find {
+      position: absolute; top: 8px; right: 18px; z-index: 10; display: none; align-items: center; gap: 2px;
+      padding: 4px 4px 4px 8px; border-radius: 6px; font: 12px 'Segoe UI', sans-serif; color: var(--fg, #ddd);
+      background: var(--chrome, #2a2a2e); border: 1px solid rgba(128, 128, 128, .3); box-shadow: 0 4px 16px rgba(0, 0, 0, .3);
+    }
+    #find.open { display: flex; }
+    #find input {
+      width: 200px; padding: 3px 6px; border: 1px solid rgba(128, 128, 128, .35); border-radius: 4px; outline: none;
+      font: inherit; color: inherit; background: var(--bg, #1C1C1F);
+    }
+    #find input:focus { border-color: var(--accent, #0A84FF); }
+    #find .count { min-width: 64px; padding: 0 6px; text-align: center; opacity: .65; font-variant-numeric: tabular-nums; }
+    #find button {
+      width: 24px; height: 22px; border: 0; border-radius: 4px; padding: 0; cursor: default; color: inherit; background: transparent;
+      font: 11px 'Segoe Fluent Icons', 'Segoe MDL2 Assets';
+    }
+    #find button:hover { background: rgba(128, 128, 128, .2); }
   </style>
 </head>
 <body>
   <div id="root"></div>
+  <div id="find">
+    <input id="findInput" type="text" placeholder="Find" spellcheck="false">
+    <span class="count" id="findCount"></span>
+    <button id="findPrev" title="Previous match (Shift+Enter)">&#xE70E;</button>
+    <button id="findNext" title="Next match (Enter)">&#xE70D;</button>
+    <button id="findClose" title="Close (Esc)">&#xE711;</button>
+  </div>
   <script src="vendor/xterm.js"></script>
   <script src="vendor/addon-fit.js"></script>
   <script src="vendor/addon-web-links.js"></script>
   <script src="vendor/addon-webgl.js"></script>
   <script src="vendor/addon-unicode11.js"></script>
+  <script src="vendor/addon-search.js"></script>
   <script src="terminal.js"></script>
 </body>
 </html>

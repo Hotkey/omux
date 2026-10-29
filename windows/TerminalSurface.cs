@@ -123,9 +123,17 @@ public sealed class TerminalSurface : ContentControl
     {
         t = "appearance",
         theme = theme.ToXterm(),
+        chrome = Theme.Css(theme.Chrome),
         fontFamily = Fonts.TerminalFamily,
         fontSize = Fonts.TerminalSize,
     });
+
+    /// <summary>Opens the find bar over the visible terminal.</summary>
+    public void Find()
+    {
+        _web.Focus();
+        Post(new { t = "find" });
+    }
 
     public void SetShortcuts(IEnumerable<object> list) => Post(new { t = "shortcuts", list });
 

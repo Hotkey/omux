@@ -6,9 +6,9 @@
              Background="{DynamicResource ChromeBrush}" AllowDrop="True">
   <Grid>
     <Grid.RowDefinitions>
-      <RowDefinition Height="*" MinHeight="200" />
+      <RowDefinition Height="3*" MinHeight="200" />
       <RowDefinition x:Name="SplitterRow" Height="5" />
-      <RowDefinition x:Name="BrowserRow" Height="180" MinHeight="80" />
+      <RowDefinition x:Name="BrowserRow" Height="2*" MinHeight="80" />
     </Grid.RowDefinitions>
 
     <!-- Preview -->

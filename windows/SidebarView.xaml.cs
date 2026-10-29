@@ -64,20 +64,31 @@ public partial class SidebarView : UserControl
     /// <summary>Every command with its shortcut — the menu bar of the macOS app.</summary>
     private void More_Click(object sender, RoutedEventArgs e)
     {
-        var menu = new ContextMenu { PlacementTarget = (UIElement)sender, Placement = PlacementMode.Bottom };
+        // The icon button's glyph font would otherwise carry over to the menu text.
+        var menu = new ContextMenu { PlacementTarget = (UIElement)sender, Placement = PlacementMode.Bottom, FontFamily = FontFamily };
         string? section = null;
+        // Ctrl+1 … Ctrl+9 go into one submenu so the menu fits on screen.
+        var goTo = new MenuItem { Header = "Go to Session" };
         foreach (var command in MainWindow.Instance.Commands)
         {
+            var item = new MenuItem { Header = command.Title, InputGestureText = command.Gesture, Command = new Relay(command.Run) };
+            if (command.Name.StartsWith("session", StringComparison.Ordinal))
+            {
+                goTo.Items.Add(item);
+                continue;
+            }
             var group = command.Name switch
             {
                 "newSession" or "newShell" or "newProject" or "openFolder" or "recentSessions" => "file",
-                "closeSession" or "filesPanel" or "settings" or "quit" => "window",
+                "closeSession" or "filesPanel" or "zoomIn" or "zoomOut" or "zoomReset" or "settings" or "quit" => "window",
                 _ => "session",
             };
             if (section is not null && group != section) menu.Items.Add(new Separator());
             section = group;
-            menu.Items.Add(new MenuItem { Header = command.Title, InputGestureText = command.Gesture, Command = new Relay(command.Run) });
+            menu.Items.Add(item);
         }
+        menu.Items.Add(new Separator());
+        menu.Items.Add(goTo);
         menu.IsOpen = true;
     }
 

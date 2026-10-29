@@ -112,11 +112,29 @@ public static class Desktop
         var text = fg.R | (fg.G << 8) | (fg.B << 16);
         DwmSetWindowAttribute(hwnd, DwmwaCaptionColor, ref caption, sizeof(int));
         DwmSetWindowAttribute(hwnd, DwmwaTextColor, ref text, sizeof(int));
+        // Borderless sheets get the rounded corners of other Windows 11 windows.
+        var round = DwmwcpRound;
+        DwmSetWindowAttribute(hwnd, DwmwaWindowCornerPreference, ref round, sizeof(int));
+    }
+
+    /// <summary>Flashes the taskbar button until the window comes to the foreground.</summary>
+    public static void FlashTaskbar(Window window)
+    {
+        var info = new FlashWInfo
+        {
+            cbSize = (uint)Marshal.SizeOf<FlashWInfo>(),
+            hwnd = new WindowInteropHelper(window).Handle,
+            dwFlags = FlashwTray | FlashwTimerNoFg,
+        };
+        if (info.hwnd != IntPtr.Zero) FlashWindowEx(ref info);
     }
 
     private const int DwmwaUseImmersiveDarkMode = 20;
     private const int DwmwaCaptionColor = 35;
     private const int DwmwaTextColor = 36;
+    private const int DwmwaWindowCornerPreference = 33;
+    private const int DwmwcpRound = 2;
+    private const uint FlashwTray = 0x2, FlashwTimerNoFg = 0xC;
     private const uint ShgfiIcon = 0x100, ShgfiSmallIcon = 0x1, ShgfiUseFileAttributes = 0x10;
     private const uint FileAttributeDirectory = 0x10, FileAttributeNormal = 0x80;
 
@@ -129,6 +147,19 @@ public static class Desktop
         [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 260)] public string szDisplayName;
         [MarshalAs(UnmanagedType.ByValTStr, SizeConst = 80)] public string szTypeName;
     }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct FlashWInfo
+    {
+        public uint cbSize;
+        public IntPtr hwnd;
+        public uint dwFlags;
+        public uint uCount;
+        public uint dwTimeout;
+    }
+
+    [DllImport("user32.dll")]
+    private static extern bool FlashWindowEx(ref FlashWInfo info);
 
     [DllImport("shell32.dll", CharSet = CharSet.Unicode)]
     private static extern IntPtr SHGetFileInfo(string path, uint attributes, ref ShFileInfo info, uint size, uint flags);
