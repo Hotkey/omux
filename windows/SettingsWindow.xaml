@@ -81,6 +81,12 @@
                  Text="Automatic uses PowerShell 7, else Windows PowerShell. Or name pwsh.exe, powershell.exe, cmd.exe or a full path; applies to sessions started from now on." />
     </Grid>
 
+    <TextBlock Text="Notifications" Style="{StaticResource Section}" />
+    <CheckBox Content="When a session needs you" IsChecked="{Binding NotifyNeedsYou}" />
+    <CheckBox Content="When a session finishes" IsChecked="{Binding NotifyDone}" Margin="0,4,0,0" />
+    <CheckBox Content="When a program in a session sends one" IsChecked="{Binding NotifyPrograms}" Margin="0,4,0,0" />
+    <TextBlock Style="{StaticResource Hint}" Text="Only for sessions you aren't looking at. Programs send them with OSC 9 or OSC 777: set Claude Code's notification channel to ghostty (/config) to get its plugins' notifications too." />
+
     <TextBlock Text="Windows" Style="{StaticResource Section}" />
     <CheckBox x:Name="ExplorerMenu" Content="Add “Open in omux” to Explorer’s folder menu" Click="ExplorerMenu_Click" />
     <TextBlock Style="{StaticResource Hint}" Text="On Windows 11 it is under “Show more options”. Uses this copy of omux.exe." />

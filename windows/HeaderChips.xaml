@@ -1,0 +1,136 @@
+<UserControl x:Class="Omux.HeaderChips"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="clr-namespace:Omux">
+  <UserControl.Resources>
+    <FontFamily x:Key="Mono">Cascadia Mono, Consolas</FontFamily>
+    <Style x:Key="PopupCard" TargetType="Border">
+      <Setter Property="Background" Value="{DynamicResource ChromeBrush}" />
+      <Setter Property="BorderBrush" Value="{DynamicResource SelectionBrush}" />
+      <Setter Property="BorderThickness" Value="1" />
+      <Setter Property="CornerRadius" Value="8" />
+      <Setter Property="Padding" Value="6,8" />
+      <Setter Property="TextElement.Foreground" Value="{DynamicResource ForegroundBrush}" />
+      <Setter Property="TextElement.FontFamily" Value="Segoe UI" />
+    </Style>
+  </UserControl.Resources>
+
+  <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+    <!-- ●●● 3 agents: opens the list of the session's subagents. -->
+    <Button x:Name="AgentPill" Style="{StaticResource Chip}" Click="AgentPill_Click" ToolTip="Subagents in this session" Visibility="Collapsed">
+      <StackPanel Orientation="Horizontal">
+        <ItemsControl x:Name="AgentDots" VerticalAlignment="Center">
+          <ItemsControl.ItemsPanel>
+            <ItemsPanelTemplate>
+              <StackPanel Orientation="Horizontal" />
+            </ItemsPanelTemplate>
+          </ItemsControl.ItemsPanel>
+          <ItemsControl.ItemTemplate>
+            <DataTemplate DataType="{x:Type local:SubAgent}">
+              <Ellipse Width="6" Height="6" Stroke="{Binding Brush}" Fill="{Binding DotFill}" StrokeThickness="1.2" Margin="0,0,2,0" />
+            </DataTemplate>
+          </ItemsControl.ItemTemplate>
+        </ItemsControl>
+        <TextBlock x:Name="AgentText" Margin="3,0,0,0" VerticalAlignment="Center" />
+      </StackPanel>
+    </Button>
+
+    <!-- #42 ● Checks failing: opens the pull request's checks. -->
+    <Button x:Name="PullChip" Style="{StaticResource Chip}" Click="PullChip_Click" Visibility="Collapsed">
+      <StackPanel Orientation="Horizontal">
+        <TextBlock Text="&#xE8CB;" FontFamily="{StaticResource IconFont}" FontSize="9" VerticalAlignment="Center" Margin="0,0,5,0" />
+        <TextBlock x:Name="PullNumber" VerticalAlignment="Center" />
+        <Ellipse x:Name="PullDot" Width="6" Height="6" Margin="5,0" VerticalAlignment="Center" />
+        <TextBlock x:Name="PullSummary" VerticalAlignment="Center" />
+      </StackPanel>
+    </Button>
+
+    <!-- The worktree's branch and its +/− totals: opens the Changes tab. -->
+    <Button x:Name="BranchChip" Style="{StaticResource Chip}" Click="BranchChip_Click" Visibility="Collapsed">
+      <StackPanel Orientation="Horizontal">
+        <TextBlock Text="&#x2442;" FontFamily="Segoe UI Symbol" FontSize="12" VerticalAlignment="Center" Margin="0,0,5,0" />
+        <TextBlock x:Name="BranchName" VerticalAlignment="Center" MaxWidth="200" TextTrimming="CharacterEllipsis" />
+        <TextBlock x:Name="BranchAdded" Foreground="#30D158" Margin="5,0,0,0" VerticalAlignment="Center" />
+        <TextBlock x:Name="BranchRemoved" Foreground="#FF453A" Margin="4,0,0,0" VerticalAlignment="Center" />
+      </StackPanel>
+    </Button>
+
+    <Popup x:Name="AgentPopup" PlacementTarget="{Binding ElementName=AgentPill}" Placement="Bottom" StaysOpen="False"
+           AllowsTransparency="True" PopupAnimation="Fade" VerticalOffset="4" Closed="AgentPopup_Closed">
+      <Border Style="{StaticResource PopupCard}" Width="400">
+        <StackPanel>
+          <StackPanel Orientation="Horizontal" Margin="8,0,8,4">
+            <TextBlock Text="Agents" FontSize="12" FontWeight="SemiBold" />
+            <TextBlock x:Name="AgentCounts" Style="{StaticResource Caption}" Margin="8,0,0,0" VerticalAlignment="Bottom" />
+          </StackPanel>
+          <ItemsControl x:Name="AgentRows">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate DataType="{x:Type local:SubAgent}">
+                <Button Style="{StaticResource PopupRow}" Click="AgentRow_Click" Margin="0,1">
+                  <StackPanel>
+                    <DockPanel>
+                      <TextBlock DockPanel.Dock="Right" Text="{Binding ElapsedText}" Style="{StaticResource Caption}" Margin="6,0,0,0" />
+                      <Ellipse Width="8" Height="8" Stroke="{Binding Brush}" Fill="{Binding DotFill}" StrokeThickness="1.5"
+                               VerticalAlignment="Center" Margin="0,0,8,0" />
+                      <Border CornerRadius="4" Background="{DynamicResource FieldBrush}" Padding="5,1" Margin="0,0,8,0" VerticalAlignment="Center">
+                        <TextBlock Text="{Binding Type}" FontFamily="{StaticResource Mono}" FontSize="10" />
+                      </Border>
+                      <TextBlock Text="{Binding Description}" FontSize="12" FontWeight="Medium" TextTrimming="CharacterEllipsis" VerticalAlignment="Center" />
+                    </DockPanel>
+                    <StackPanel Orientation="Horizontal" Margin="16,3,0,0">
+                      <TextBlock Text="{Binding ActivityLine}" Style="{StaticResource Caption}" MaxWidth="260" />
+                      <TextBlock Text=" · " Style="{StaticResource Caption}" />
+                      <TextBlock Text="{Binding ToolsText}" Style="{StaticResource Caption}" />
+                    </StackPanel>
+                  </StackPanel>
+                </Button>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
+          <TextBlock Text="Click an agent to open its transcript" Style="{StaticResource Caption}" Margin="8,4,8,0" />
+        </StackPanel>
+      </Border>
+    </Popup>
+
+    <Popup x:Name="PullPopup" PlacementTarget="{Binding ElementName=PullChip}" Placement="Bottom" StaysOpen="False"
+           AllowsTransparency="True" PopupAnimation="Fade" VerticalOffset="4">
+      <Border Style="{StaticResource PopupCard}" Width="320" TextElement.FontSize="11">
+        <StackPanel>
+          <StackPanel Margin="8,0,8,6">
+            <TextBlock x:Name="PullTitle" FontSize="12" FontWeight="SemiBold" TextWrapping="Wrap" MaxHeight="34" TextTrimming="CharacterEllipsis" />
+            <TextBlock x:Name="PullFacts" Style="{StaticResource Caption}" Margin="0,2,0,0" />
+          </StackPanel>
+          <TextBlock x:Name="NoChecks" Text="No checks" Style="{StaticResource Caption}" Margin="8,0" />
+          <ScrollViewer MaxHeight="260" VerticalScrollBarVisibility="Auto">
+            <ItemsControl x:Name="Checks">
+              <ItemsControl.ItemTemplate>
+                <DataTemplate DataType="{x:Type local:PullRequestCheck}">
+                  <Button Style="{StaticResource PopupRow}" Click="Check_Click" Padding="0">
+                    <DockPanel>
+                      <TextBlock DockPanel.Dock="Right" Text="{Binding Label}" Style="{StaticResource Caption}" Margin="6,0,0,0" />
+                      <Ellipse Width="6" Height="6" Fill="{Binding Brush}" VerticalAlignment="Center" Margin="0,0,6,0" />
+                      <TextBlock Text="{Binding Name}" TextTrimming="CharacterEllipsis" />
+                    </DockPanel>
+                  </Button>
+                </DataTemplate>
+              </ItemsControl.ItemTemplate>
+            </ItemsControl>
+          </ScrollViewer>
+          <Separator Margin="0,4" />
+          <Button Style="{StaticResource PopupRow}" Click="OpenPull_Click">
+            <StackPanel Orientation="Horizontal">
+              <TextBlock Text="&#xE8A7;" FontFamily="{StaticResource IconFont}" Margin="0,1,8,0" />
+              <TextBlock Text="Open on GitHub" />
+            </StackPanel>
+          </Button>
+          <Button x:Name="DeleteMerged" Style="{StaticResource PopupRow}" Click="DeleteMerged_Click">
+            <StackPanel Orientation="Horizontal">
+              <TextBlock Text="&#xE74D;" FontFamily="{StaticResource IconFont}" Margin="0,1,8,0" />
+              <TextBlock Text="Delete Worktree and Branch…" />
+            </StackPanel>
+          </Button>
+        </StackPanel>
+      </Border>
+    </Popup>
+  </StackPanel>
+</UserControl>

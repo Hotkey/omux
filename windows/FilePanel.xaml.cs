@@ -95,6 +95,7 @@ public partial class FilePanel : UserControl
 
     private void OnStoreChanged(object? sender, PropertyChangedEventArgs e)
     {
+        if (e.PropertyName is nameof(Store.OpenAgent) or nameof(Store.SelectedTabId)) ShowAgent();
         if (!_active) return;
         switch (e.PropertyName)
         {
@@ -106,6 +107,24 @@ public partial class FilePanel : UserControl
                 ShowRequested();
                 break;
         }
+    }
+
+    /// <summary>The open subagent's transcript, when it belongs to the selected session, replaces the preview.</summary>
+    private void ShowAgent()
+    {
+        var agent = _store.OpenAgent is { } open && open.TabId == _store.SelectedTabId ? open : null;
+        if (agent is null)
+        {
+            AgentHost.Content = null;
+            AgentHost.Visibility = Visibility.Collapsed;
+            PreviewArea.Visibility = Visibility.Visible;
+            return;
+        }
+        if (AgentHost.Content is not AgentTranscriptView { } view || view.AgentId != agent.AgentId)
+            AgentHost.Content = new AgentTranscriptView(agent);
+        AgentHost.Visibility = Visibility.Visible;
+        // The preview is a WebView2, which would draw over anything placed on top of it.
+        PreviewArea.Visibility = Visibility.Collapsed;
     }
 
     /// <summary>Folder the panel shows: the selected session's folder, else its project's.</summary>
@@ -165,13 +184,16 @@ public partial class FilePanel : UserControl
 
     private void Tree_SelectedItemChanged(object sender, RoutedPropertyChangedEventArgs<object> e)
     {
-        if (e.NewValue is FileNode { IsDirectory: false, IsSection: false } node && File.Exists(node.Path)) Preview(node.Path);
+        if (e.NewValue is not FileNode { IsDirectory: false, IsSection: false } node || !File.Exists(node.Path)) return;
+        _store.OpenAgent = null;
+        Preview(node.Path);
     }
 
     private void ShowRequested()
     {
         if (_store.PreviewRequest is not { } path) return;
         _store.PreviewRequest = null;
+        _store.OpenAgent = null;
         Preview(path);
     }
 

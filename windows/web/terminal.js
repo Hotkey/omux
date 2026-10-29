@@ -23,6 +23,7 @@ host.addEventListener('message', (event) => {
     case 'shortcuts': shortcuts = m.list; break;
     case 'focus': if (current) sessions.get(current)?.term.focus(); break;
     case 'find': openFind(); break;
+    case 'paste': paste(m.id, m.text, m.submit); break;
   }
 });
 
@@ -75,10 +76,23 @@ function create(id) {
     } catch { /* not a URL */ }
     return true;
   });
-  // OSC 9;9: Windows Terminal's working-directory report.
+  // OSC 9;9: Windows Terminal's working-directory report. Any other number first is a
+  // ConEmu command (like 9;4 progress); plain text is an iTerm2 notification.
   term.parser.registerOscHandler(9, (data) => {
-    if (!data.startsWith('9;')) return false;
-    post({ t: 'cwd', id, path: data.slice(2).replace(/^"|"$/g, '') });
+    if (data.startsWith('9;')) {
+      post({ t: 'cwd', id, path: data.slice(2).replace(/^"|"$/g, '') });
+      return true;
+    }
+    if (!data || /^\d+(;|$)/.test(data)) return false;
+    post({ t: 'notify', id, title: null, body: data });
+    return true;
+  });
+  // OSC 777;notify;title;body: Ghostty's and rxvt's notifications.
+  term.parser.registerOscHandler(777, (data) => {
+    const [command, title, ...rest] = data.split(';');
+    const body = rest.join(';');
+    if (command !== 'notify' || title === undefined || !body) return false;
+    post({ t: 'notify', id, title: title || null, body });
     return true;
   });
   // OSC 133;A: a new prompt; working and blocked status records are over.
@@ -130,6 +144,15 @@ function create(id) {
       if (text) term.paste(text);
     }
   });
+}
+
+/** Types text into the session as a paste, so newlines don't submit it early. */
+function paste(id, text, submit) {
+  const session = sessions.get(id);
+  if (!session) return;
+  session.term.paste(text);
+  // A beat later, so the program has taken the paste before Return arrives.
+  if (submit) setTimeout(() => post({ t: 'in', id, d: '\r' }), 150);
 }
 
 function keyHandler(e, term) {
@@ -313,6 +336,7 @@ function programStatus(id, data) {
     state: fields.state,
     kind: fields.state === 'blocked' && ['permission', 'question', 'auth'].includes(fields.kind) ? fields.kind : null,
     message: decodeText(fields.msg),
+    title: decodeText(fields.title),
   };
   // Re-insert so the map's order is oldest update first.
   session.status.delete(recordId);
@@ -344,9 +368,11 @@ function processExited(id) { removeActive(id); }
 function emitStatus(id) {
   const status = sessions.get(id).status;
   const records = [...status.values()];
+  // Every record but the root, e.g. Claude Code's subagents.
+  const children = [...status].filter(([key]) => key !== '').map(([key, r]) => ({ id: key, ...r }));
   const rootRecord = status.get('') ?? records[records.length - 1];
-  if (!rootRecord) return post({ t: 'status', id, state: null, detail: null });
-  post({ t: 'status', id, state: rootRecord.state, detail: rootRecord.kind ?? rootRecord.message });
+  if (!rootRecord) return post({ t: 'status', id, state: null, kind: null, message: null, children: [] });
+  post({ t: 'status', id, state: rootRecord.state, kind: rootRecord.kind, message: rootRecord.message, children });
 }
 
 post({ t: 'ready' });

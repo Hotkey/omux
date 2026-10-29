@@ -66,6 +66,8 @@ public sealed class TabItem : Observable
     [JsonPropertyName("color")] public TabColor Color { get => _color; set { if (Set(ref _color, value)) Raise(nameof(DotBrush)); } }
     /// <summary>Stable Claude Code session id so the conversation resumes across relaunches.</summary>
     [JsonPropertyName("claudeSessionID")] public Guid ClaudeSessionId { get; set; } = Guid.NewGuid();
+    /// <summary>Set when the session runs in its own git worktree; Directory is the worktree.</summary>
+    [JsonPropertyName("worktree")] public Worktree? Worktree { get; set; }
 
     [JsonIgnore] public TabRuntime Runtime { get; }
     [JsonIgnore] public bool IsRenaming { get => _isRenaming; set => Set(ref _isRenaming, value); }
@@ -82,21 +84,58 @@ public sealed class TabItem : Observable
         }
     }
 
+    /// <summary>
+    /// The line under the name in the sidebar: a worktree session's branch first, and
+    /// "2 agents" while subagents run (the selected session lists them instead).
+    /// </summary>
+    [JsonIgnore]
+    public string? SidebarLine
+    {
+        get
+        {
+            var running = Runtime.IsSelected ? 0 : Runtime.Agents.Count(a => !a.Finished);
+            var agents = running > 0 ? $"{running} agent{(running == 1 ? "" : "s")}" : null;
+            var parts = Worktree is { } worktree
+                ? new[] { worktree.Branch, Runtime.StatusLine(showFolder: false), agents }
+                : [Runtime.SidebarLine, agents];
+            var line = string.Join(" · ", parts.OfType<string>());
+            return line.Length > 0 ? line : null;
+        }
+    }
+
+    /// <summary>Subagent rows in the sidebar: all of the selected session's, others' only when they need you.</summary>
+    [JsonIgnore]
+    public IReadOnlyList<SubAgent> SidebarAgents => Runtime.IsSelected ? Runtime.Agents : Runtime.Agents.Where(a => a.Blocked).ToList();
+
     public TabItem()
     {
         Runtime = new TabRuntime();
-        Runtime.PropertyChanged += (_, _) => Raise(nameof(DotBrush));
+        Runtime.PropertyChanged += (_, e) =>
+        {
+            Raise(nameof(DotBrush));
+            Raise(nameof(SidebarLine));
+            if (e.PropertyName is nameof(TabRuntime.Agents) or nameof(TabRuntime.IsSelected)) Raise(nameof(SidebarAgents));
+        };
     }
 
-    public TabItem(string name, string? directory = null, string? command = null) : this()
+    public TabItem(string name, string? directory = null, string? command = null, Worktree? worktree = null) : this()
     {
         _name = name;
         _directory = directory;
         _command = command;
+        Worktree = worktree;
     }
 
     public void RefreshDot() => Raise(nameof(DotBrush));
 }
+
+/// <summary>A session's own branch and folder, made with git worktree.</summary>
+/// <param name="Base">The branch it was made from; diffs and merges compare against it.</param>
+/// <param name="Repo">The main checkout that owns the worktree.</param>
+public sealed record Worktree(
+    [property: JsonPropertyName("branch")] string Branch,
+    [property: JsonPropertyName("base")] string Base,
+    [property: JsonPropertyName("repo")] string Repo);
 
 public sealed class TabGroup : Observable
 {
@@ -104,6 +143,7 @@ public sealed class TabGroup : Observable
     private string? _directory;
     private string? _command = "claude";
     private bool _isCollapsed;
+    private bool _useWorktrees;
     private bool _isRenaming;
 
     [JsonPropertyName("id")] public Guid Id { get; set; } = Guid.NewGuid();
@@ -111,6 +151,8 @@ public sealed class TabGroup : Observable
     [JsonPropertyName("directory")] public string? Directory { get => _directory; set => Set(ref _directory, value); }
     [JsonPropertyName("command")] public string? Command { get => _command; set => Set(ref _command, value); }
     [JsonPropertyName("isCollapsed")] public bool IsCollapsed { get => _isCollapsed; set => Set(ref _isCollapsed, value); }
+    /// <summary>New sessions get their own git worktree.</summary>
+    [JsonPropertyName("useWorktrees")] public bool UseWorktrees { get => _useWorktrees; set => Set(ref _useWorktrees, value); }
     [JsonPropertyName("tabs")] public List<TabItem> Tabs { get; set; } = [];
 
     [JsonIgnore] public bool IsRenaming { get => _isRenaming; set => Set(ref _isRenaming, value); }
@@ -133,6 +175,9 @@ public sealed class Workspace
 
 public enum StatusState { Idle, Working, Done, Blocked, Error }
 
+/// <summary>An OSC 7501 record other than the root, e.g. one of Claude Code's subagents.</summary>
+public sealed record StatusChild(string Id, StatusState? State, string? Kind, string? Message, string? Title);
+
 /// <summary>Live, non-persisted state of one terminal tab.</summary>
 public sealed class TabRuntime : Observable
 {
@@ -144,6 +189,12 @@ public sealed class TabRuntime : Observable
     private bool _busy;
     private StatusState? _statusState;
     private string? _statusDetail;
+    private string? _statusKind;
+    private IReadOnlyList<StatusChild> _statusChildren = [];
+    private bool _isSelected;
+    private IReadOnlyList<SubAgent> _agents = [];
+    private PullRequest? _pullRequest;
+    private string? _gitActivity;
 
     public string Title { get => _title; set { if (Set(ref _title, value)) Lines(); } }
     public string? Cwd { get => _cwd; set { if (Set(ref _cwd, value)) Lines(); } }
@@ -152,8 +203,22 @@ public sealed class TabRuntime : Observable
     public bool Exited { get => _exited; set { if (Set(ref _exited, value)) Lines(); } }
     /// <summary>A program (e.g. claude) is running in the shell, as opposed to an idle prompt.</summary>
     public bool Busy { get => _busy; set => Set(ref _busy, value); }
-    public StatusState? StatusState { get => _statusState; set { if (Set(ref _statusState, value)) { Lines(); Raise(nameof(StatusColor)); } } }
+    public StatusState? StatusState { get => _statusState; set { if (Set(ref _statusState, value)) { Lines(); Raise(nameof(StatusColor)); Raise(nameof(AwaitsPermission)); } } }
     public string? StatusDetail { get => _statusDetail; set { if (Set(ref _statusDetail, value)) Lines(); } }
+    /// <summary>Why a blocked program waits: permission, question or auth.</summary>
+    public string? StatusKind { get => _statusKind; set { if (Set(ref _statusKind, value)) { Lines(); Raise(nameof(AwaitsPermission)); } } }
+    public IReadOnlyList<StatusChild> StatusChildren { get => _statusChildren; set => Set(ref _statusChildren, value); }
+    /// <summary>The sidebar's selected session; it lists its subagents instead of counting them.</summary>
+    public bool IsSelected { get => _isSelected; set => Set(ref _isSelected, value); }
+    /// <summary>Subagents worth showing: running ones, and finished ones for a short while.</summary>
+    public IReadOnlyList<SubAgent> Agents { get => _agents; set => Set(ref _agents, value); }
+    /// <summary>The pull request for a worktree session's branch, when gh finds one.</summary>
+    public PullRequest? PullRequest { get => _pullRequest; set => Set(ref _pullRequest, value); }
+    /// <summary>A git action in progress ("Pushing…"), shown in the Changes tab.</summary>
+    public string? GitActivity { get => _gitActivity; set => Set(ref _gitActivity, value); }
+
+    /// <summary>Claude Code is waiting on a tool permission, which Allow/Deny can answer.</summary>
+    public bool AwaitsPermission => StatusState == Omux.StatusState.Blocked && StatusKind == "permission";
 
     /// <summary>Status under the session name in the sidebar.</summary>
     public string? SidebarLine => StatusLine(Prefs.Current.ShowFolderPath);
@@ -164,7 +229,7 @@ public sealed class TabRuntime : Observable
     {
         switch (StatusState)
         {
-            case Omux.StatusState.Blocked: return StatusDetail is { } b ? $"Needs you · {b}" : "Needs you";
+            case Omux.StatusState.Blocked: return (StatusDetail ?? StatusKind) is { } b ? $"Needs you · {b}" : "Needs you";
             case Omux.StatusState.Working: return StatusDetail is { } w ? $"Working · {w}" : "Working…";
             case Omux.StatusState.Done: return "Done";
             case Omux.StatusState.Error: return StatusDetail is { } e ? $"Error · {e}" : "Error";

@@ -74,7 +74,7 @@ Local files omux touches:
 
 ## Windows
 
-`windows/` is a native Windows port with the same features: projects and sessions, conversations that resume, live status, the files panel, recent conversations, usage limits, themes and the quick switcher. It is a WPF app; each session runs in a Windows pseudo console (ConPTY) and is drawn by [xterm.js](https://xtermjs.org) in WebView2.
+`windows/` is a native Windows port with the same features: projects and sessions, conversations that resume, live status, notifications, Allow and Deny from the sidebar, subagents, worktree sessions with pull request status, the right panel's Files, Changes and Browser tabs, recent conversations, usage limits, themes and the quick switcher. It is a WPF app; each session runs in a Windows pseudo console (ConPTY) and is drawn by [xterm.js](https://xtermjs.org) in WebView2.
 
 ### Requirements
 
@@ -101,6 +101,7 @@ Ctrl+T, Ctrl+R, Ctrl+K and Ctrl+O belong to Claude Code and the shell, so omux's
 | Action | Shortcut |
 | --- | --- |
 | New session / new shell / new project | Ctrl+Shift+T / Ctrl+Shift+Alt+T / Ctrl+Shift+N |
+| New session in a worktree | Ctrl+Shift+G |
 | Open folder / recent Claude conversation | Ctrl+Shift+O / Ctrl+Shift+Alt+O |
 | Close session | Ctrl+Shift+W |
 | Rename / edit session | F2 / Ctrl+Shift+I |
@@ -110,18 +111,20 @@ Ctrl+T, Ctrl+R, Ctrl+K and Ctrl+O belong to Claude Code and the shell, so omux's
 | Jump to session | Ctrl+Shift+K |
 | Next / previous session | Ctrl+Tab / Ctrl+Shift+Tab |
 | Session 1–9 in the current project | Ctrl+1 … Ctrl+9 |
-| Files panel | Ctrl+Shift+E |
+| Right panel / Files / Changes / Browser | Ctrl+Shift+E / Ctrl+Shift+1 / Ctrl+Shift+2 / Ctrl+Shift+3 |
 | Find in session (Enter / Shift+Enter to step, Esc to close) | Ctrl+Shift+F |
 | Bigger / smaller / default text | Ctrl+= or Ctrl+Num + / Ctrl+- or Ctrl+Num - / Ctrl+0 |
 | Settings / quit | Ctrl+, / Alt+F4 |
 
 In a terminal, Ctrl+C copies when text is selected, Ctrl+V pastes, right-click copies the selection or pastes, and Ctrl-click opens a URL or previews a file path.
 
-When a session in the background rings the bell or waits for you, the taskbar button flashes and shows how many sessions are waiting.
+When a session in the background rings the bell or waits for you, the taskbar button flashes and shows how many sessions are waiting. Notifications appear as Windows notifications; clicking one opens its session.
+
+Worktrees go next to the repo in `<repo>.worktrees\<branch>`. Creating a pull request runs `git push` with your usual Git credentials (Git Credential Manager may ask you to sign in), and pull request status needs the [GitHub CLI](https://cli.github.com) (`gh`) signed in.
 
 ### Privacy on Windows
 
-The same single network request as on macOS, for usage limits. Claude Code on Windows keeps its login in `%USERPROFILE%\.claude\.credentials.json`; omux reads the access token from there and never writes or logs it. Your projects and sessions are saved to `%APPDATA%\omux\workspace.json` (plus a `.bak` copy) and settings to `%APPDATA%\omux\settings.json`.
+The same network requests as on macOS: usage limits, and pull request status through `gh` when it is installed. Claude Code on Windows keeps its login in `%USERPROFILE%\.claude\.credentials.json`; omux reads the access token from there and never writes or logs it. Your projects and sessions are saved to `%APPDATA%\omux\workspace.json` (plus a `.bak` copy) and settings to `%APPDATA%\omux\settings.json`. Elements picked in the browser are saved under `%TEMP%\omux-picks`.
 
 ## Disclaimer
 

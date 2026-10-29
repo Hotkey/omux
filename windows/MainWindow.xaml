@@ -16,7 +16,7 @@
       <ColumnDefinition Width="5" />
       <ColumnDefinition Width="*" MinWidth="360" />
       <ColumnDefinition x:Name="FilesSplitterColumn" Width="5" />
-      <ColumnDefinition x:Name="FilesColumn" Width="340" MinWidth="240" MaxWidth="800" />
+      <ColumnDefinition x:Name="FilesColumn" Width="380" MinWidth="260" MaxWidth="900" />
     </Grid.ColumnDefinitions>
 
     <local:SidebarView x:Name="Sidebar" Grid.Column="0" />
@@ -28,7 +28,7 @@
               BorderBrush="{DynamicResource SeparatorBrush}" BorderThickness="0,0,0,1">
         <DockPanel Margin="10,0">
           <Button DockPanel.Dock="Right" Style="{StaticResource IconButton}" Content="&#xE89F;" Click="ToggleFiles_Click"
-                  x:Name="FilesToggle" ToolTip="Files panel (Ctrl+Shift+E)" Margin="6,0,0,0" />
+                  x:Name="FilesToggle" ToolTip="Right panel (Ctrl+Shift+E)" Margin="6,0,0,0" />
           <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" DataContext="{Binding SelectedTab}"
                       Visibility="{Binding Converter={StaticResource NotNull}}">
             <Button Style="{StaticResource IconButton}" Content="&#xE71A;" FontSize="10" ToolTip="Interrupt (Ctrl-C)"
@@ -36,16 +36,22 @@
             <Button Style="{StaticResource IconButton}" Content="&#xE768;" FontSize="10" ToolTip="Continue this Claude conversation"
                     Click="Start_Click" Visibility="{Binding Runtime.Busy, Converter={StaticResource Hidden}}" />
           </StackPanel>
+          <!-- Subagents, then a worktree session's pull request and branch. -->
+          <local:HeaderChips DockPanel.Dock="Right" Margin="0,0,4,0" />
           <StackPanel Orientation="Horizontal" DataContext="{Binding SelectedTab}" VerticalAlignment="Center"
                       Visibility="{Binding Converter={StaticResource NotNull}}">
             <Ellipse Width="8" Height="8" Fill="{Binding DotBrush}" VerticalAlignment="Center" />
             <TextBlock Text="{Binding Name}" FontSize="11" FontWeight="SemiBold" Margin="10,0,0,0" VerticalAlignment="Center" />
             <TextBlock Text="{Binding Runtime.HeaderLine}" Style="{StaticResource Caption}" FontSize="10" Margin="10,0,0,0"
                        VerticalAlignment="Center" MaxWidth="420" />
+            <local:PermissionButtons TabId="{Binding Id}" Margin="10,0,0,0"
+                                     Visibility="{Binding Runtime.AwaitsPermission, Converter={StaticResource Visible}}" />
           </StackPanel>
+          <!-- Worktree sessions show their branch chip instead of the folder. -->
           <TextBlock DataContext="{Binding SelectedTab}" Text="{Binding Runtime.Cwd, Converter={StaticResource Abbreviate}}"
                      FontSize="10" Foreground="{DynamicResource TertiaryBrush}" HorizontalAlignment="Right"
-                     VerticalAlignment="Center" TextTrimming="CharacterEllipsis" Margin="10,0,4,0" />
+                     VerticalAlignment="Center" TextTrimming="CharacterEllipsis" Margin="10,0,4,0"
+                     Visibility="{Binding Worktree, Converter={StaticResource IsNull}}" />
         </DockPanel>
       </Border>
 
@@ -61,6 +67,6 @@
     </DockPanel>
 
     <GridSplitter x:Name="FilesSplitter" Grid.Column="3" Style="{StaticResource Divider}" ResizeBehavior="PreviousAndNext" ResizeDirection="Columns" />
-    <local:FilePanel x:Name="Files" Grid.Column="4" />
+    <local:RightPanel x:Name="Right" Grid.Column="4" />
   </Grid>
 </Window>

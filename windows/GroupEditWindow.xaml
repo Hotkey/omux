@@ -36,8 +36,11 @@
                  VerticalAlignment="Center" Foreground="{DynamicResource TertiaryBrush}" />
     </Grid>
 
-    <TextBlock Grid.Row="3" Grid.Column="1" Text="Applies when a session starts. Existing sessions keep running."
-               Style="{StaticResource Caption}" Margin="0,2,0,0" TextWrapping="Wrap" />
+    <StackPanel Grid.Row="3" Grid.Column="1">
+      <TextBlock Text="Applies when a session starts. Existing sessions keep running."
+                 Style="{StaticResource Caption}" Margin="0,2,0,0" TextWrapping="Wrap" />
+      <CheckBox x:Name="UseWorktrees" Content="Give new sessions their own Git worktree" Margin="0,10,0,0" />
+    </StackPanel>
 
     <StackPanel Grid.Row="4" Grid.ColumnSpan="2" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,20,0,0">
       <Button Content="Cancel" IsCancel="True" MinWidth="80" Margin="0,0,8,0" />

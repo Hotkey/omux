@@ -79,7 +79,7 @@ public partial class MainWindow : Window
     private readonly Store _store = Store.Shared;
     private readonly string[] _launchFolders;
     private (string Name, DateTime At) _lastCommand;
-    private double _filesWidth = 340;
+    private double _filesWidth = 380;
     private int _attentionCount;
 
     public MainWindow(string[] launchFolders)
@@ -133,9 +133,19 @@ public partial class MainWindow : Window
             alt = c.Modifiers.HasFlag(ModifierKeys.Alt),
         })));
         _store.Load();
-        Files.Initialize(WebEnvironment);
+        Right.Files.Initialize(WebEnvironment);
         OpenFromOutside(_launchFolders);
         UpdateNoSession();
+        TrackChanges();
+        AgentMonitor.Shared.Start();
+        PullRequestMonitor.Shared.Start(this);
+    }
+
+    /// <summary>The Changes tab and the branch chip follow the selected session and its folder.</summary>
+    private void TrackChanges()
+    {
+        var tab = _store.SelectedTab;
+        Changes.Shared.Track(tab?.Id, tab is null ? null : _store.FolderOf(tab), tab?.Worktree);
     }
 
     private List<AppCommand> BuildCommands()
@@ -148,11 +158,15 @@ public partial class MainWindow : Window
         {
             new("newSession", "New Session", Key.T, CtrlShift, () => _store.NewTab()),
             new("newShell", "New Shell", Key.T, CtrlShiftAlt, () => _store.NewTab(command: "")),
+            new("newWorktree", "New Session in Worktree…", Key.G, CtrlShift, () => { if ((_store.SelectedGroup ?? _store.Groups.FirstOrDefault()) is { } group) ShowNewWorktree(group.Id); }),
             new("newProject", "New Project", Key.N, CtrlShift, _store.NewGroup),
             new("openFolder", "Open Folder…", Key.O, CtrlShift, _store.OpenFolderPanel),
             new("recentSessions", "Open Recent Claude Session…", Key.O, CtrlShiftAlt, ShowRecentSessions),
-            new("closeSession", "Close Session", Key.W, CtrlShift, () => OnSelected(_store.CloseTab)),
-            new("filesPanel", "Files Panel", Key.E, CtrlShift, () => Prefs.Current.ShowFiles = !Prefs.Current.ShowFiles),
+            new("closeSession", "Close Session", Key.W, CtrlShift, () => OnSelected(_store.RequestClose)),
+            new("filesPanel", "Right Panel", Key.E, CtrlShift, () => Prefs.Current.ShowFiles = !Prefs.Current.ShowFiles),
+            new("panelFiles", "Files", Key.D1, CtrlShift, () => Store.ShowPanel(PanelTab.Files)),
+            new("panelChanges", "Changes", Key.D2, CtrlShift, () => Store.ShowPanel(PanelTab.Changes)),
+            new("panelBrowser", "Browser", Key.D3, CtrlShift, () => Store.ShowPanel(PanelTab.Browser)),
             new("zoomIn", "Bigger Text", Key.OemPlus, ModifierKeys.Control, () => Zoom(1), Key.Add),
             new("zoomOut", "Smaller Text", Key.OemMinus, ModifierKeys.Control, () => Zoom(-1), Key.Subtract),
             new("zoomReset", "Default Text Size", Key.D0, ModifierKeys.Control, () => Zoom(0)),
@@ -212,11 +226,12 @@ public partial class MainWindow : Window
         {
             case nameof(Store.SelectedTabId):
                 UpdateNoSession();
+                TrackChanges();
                 if (_store.SelectedTab is { IsRenaming: false })
                     Dispatcher.BeginInvoke(TerminalSurface.Shared.FocusTerminal, DispatcherPriority.Input);
                 break;
             case nameof(Store.PreviewRequest):
-                if (_store.PreviewRequest is not null) Prefs.Current.ShowFiles = true;
+                if (_store.PreviewRequest is not null) Store.ShowPanel(PanelTab.Files);
                 break;
         }
     }
@@ -228,7 +243,7 @@ public partial class MainWindow : Window
             case nameof(Prefs.Theme):
                 App.ApplyTheme();
                 _store.ApplyAppearance();
-                Files.ApplyTheme();
+                Right.Files.ApplyTheme();
                 foreach (var (tab, _) in _store.AllTabs) tab.RefreshDot();
                 break;
             case nameof(Prefs.FontFamily) or nameof(Prefs.FontSize):
@@ -254,13 +269,13 @@ public partial class MainWindow : Window
     {
         var show = Prefs.Current.ShowFiles;
         if (!show && FilesColumn.ActualWidth > 0) _filesWidth = FilesColumn.ActualWidth;
-        FilesColumn.MinWidth = show ? 240 : 0;
+        FilesColumn.MinWidth = show ? 260 : 0;
         FilesColumn.Width = new GridLength(show ? _filesWidth : 0);
         FilesSplitterColumn.Width = new GridLength(show ? 5 : 0);
         FilesSplitter.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
-        Files.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
+        Right.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
         FilesToggle.Foreground = (Brush)FindResource(show ? "ForegroundBrush" : "SecondaryBrush");
-        Files.SetActive(show);
+        Right.SetActive(show);
     }
 
     private void ToggleFiles_Click(object sender, RoutedEventArgs e) => Prefs.Current.ShowFiles = !Prefs.Current.ShowFiles;
@@ -288,6 +303,8 @@ public partial class MainWindow : Window
     public void EditGroup(Guid id) => new GroupEditWindow(id) { Owner = this }.ShowDialog();
 
     public void ShowSettings() => new SettingsWindow { Owner = this }.ShowDialog();
+
+    public void ShowNewWorktree(Guid groupId) => new WorktreeWindow(groupId) { Owner = this }.ShowDialog();
 
     // MARK: Taskbar badge
 

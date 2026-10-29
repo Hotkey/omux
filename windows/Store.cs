@@ -16,6 +16,8 @@ public sealed partial class Store : Observable
     public ObservableCollection<object> Rows { get; } = [];
     /// <summary>File paths mentioned in the selected session's output, newest last.</summary>
     public ObservableCollection<string> MentionedPaths { get; } = [];
+    /// <summary>Local server URLs (localhost, …) in the selected session's output, newest last.</summary>
+    public ObservableCollection<string> MentionedUrls { get; } = [];
 
     /// <summary>The number of sessions waiting on the user changed.</summary>
     public event Action<int>? AttentionChanged;
@@ -29,6 +31,7 @@ public sealed partial class Store : Observable
     private readonly TerminalSurface _surface = TerminalSurface.Shared;
     private Guid? _selectedTabId;
     private string? _previewRequest;
+    private AgentRef? _openAgent;
 
     private Store()
     {
@@ -49,7 +52,9 @@ public sealed partial class Store : Observable
         set
         {
             if (_selectedTabId == value) return;
+            if (_selectedTabId is { } previous && Tab(previous) is { } previousTab) previousTab.Runtime.IsSelected = false;
             _selectedTabId = value;
+            if (value is { } selected && Tab(selected) is { } selectedTab) selectedTab.Runtime.IsSelected = true;
             Raise(nameof(SelectedTabId));
             Raise(nameof(SelectedTab));
             Raise(nameof(SelectedGroup));
@@ -67,6 +72,9 @@ public sealed partial class Store : Observable
 
     /// <summary>A file the user Ctrl-clicked in a terminal; the files panel shows it.</summary>
     public string? PreviewRequest { get => _previewRequest; set => Set(ref _previewRequest, value); }
+
+    /// <summary>The subagent whose transcript the files panel shows.</summary>
+    public AgentRef? OpenAgent { get => _openAgent; set => Set(ref _openAgent, value); }
 
     private static Dispatcher Dispatcher => Application.Current.Dispatcher;
 
@@ -111,6 +119,9 @@ public sealed partial class Store : Observable
     public TabGroup? GroupContaining(Guid tabId) => Location(tabId) is { } loc ? Groups[loc.Group] : null;
 
     public TabItem? SelectedTab => SelectedTabId is { } id ? Tab(id) : null;
+
+    /// <summary>The folder a session runs in, with ~ expanded.</summary>
+    public string? FolderOf(TabItem tab) => (tab.Directory ?? GroupContaining(tab.Id)?.Directory) is { } dir ? Paths.Expand(dir) : null;
 
     public TabGroup? SelectedGroup => (SelectedTabId is { } id ? GroupContaining(id) : null) ?? Groups.FirstOrDefault();
 
@@ -182,9 +193,13 @@ public sealed partial class Store : Observable
         {
             if (!_terminals.TryGetValue(id, out var live) || live != pty) return;
             _surface.ProcessExited(id);
-            if (Tab(id) is { } exitedTab) Update(exitedTab, rt => { rt.Exited = true; rt.StatusState = null; rt.Busy = false; });
+            if (Tab(id) is { } exitedTab) Update(exitedTab, ClearStatus);
         });
-        Update(tab, rt => { rt.Exited = false; rt.Cwd = dir; rt.StatusState = null; rt.Title = ""; });
+        Update(tab, rt =>
+        {
+            rt.Exited = false; rt.Cwd = dir; rt.Title = "";
+            rt.StatusState = null; rt.StatusKind = null; rt.StatusDetail = null; rt.StatusChildren = [];
+        });
 
         // Shells without a "run this, then stay" flag get the command typed in, as on macOS.
         if (!string.IsNullOrEmpty(startup) && !shell.RunsStartupCommand)
@@ -216,26 +231,59 @@ public sealed partial class Store : Observable
         if (!_terminals.ContainsKey(id)) return;
         KillTree(id);
         _surface.ProcessExited(id);
-        if (Tab(id) is { } tab) Update(tab, rt => { rt.Exited = true; rt.StatusState = null; rt.Busy = false; });
+        if (Tab(id) is { } tab) Update(tab, ClearStatus);
     }
 
-    /// <summary>Rescans the selected session's scrollback for file paths.</summary>
+    private static void ClearStatus(TabRuntime rt)
+    {
+        rt.Exited = true;
+        rt.StatusState = null;
+        rt.StatusKind = null;
+        rt.StatusChildren = [];
+        rt.Busy = false;
+    }
+
+    /// <summary>Rescans the selected session's scrollback for file paths and local URLs.</summary>
     public async void ScanMentionedPaths()
     {
         if (SelectedTabId is not { } id || !_terminals.ContainsKey(id))
         {
             MentionedPaths.Clear();
+            MentionedUrls.Clear();
             return;
         }
         var text = await _surface.BufferTextAsync(id);
-        var paths = await Task.Run(() => FindPaths(text));
-        if (SelectedTabId != id || paths.SequenceEqual(MentionedPaths)) return;
-        MentionedPaths.Clear();
-        foreach (var path in paths) MentionedPaths.Add(path);
+        var (paths, urls) = await Task.Run(() => (FindPaths(text), FindLocalUrls(text)));
+        if (SelectedTabId != id) return;
+        Replace(MentionedPaths, paths);
+        Replace(MentionedUrls, urls);
+    }
+
+    private static void Replace(ObservableCollection<string> collection, List<string> items)
+    {
+        if (items.SequenceEqual(collection)) return;
+        collection.Clear();
+        foreach (var item in items) collection.Add(item);
     }
 
     [GeneratedRegex(@"(?<![\w])(?:[A-Za-z]:[\\/]|~[\\/])[\w.+@%~\\/-]+")]
     private static partial Regex PathPattern();
+
+    [GeneratedRegex(@"https?://(?:localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1\])(?::\d+)?(?:/[^\s'""<>)\]]*)?")]
+    private static partial Regex LocalUrlPattern();
+
+    /// <summary>Local server URLs (localhost, 127.0.0.1, …) in the text, oldest first.</summary>
+    private static List<string> FindLocalUrls(string text)
+    {
+        var result = new List<string>();
+        foreach (Match match in LocalUrlPattern().Matches(text))
+        {
+            var url = match.Value.TrimEnd('.', ',', ':', ';');
+            result.Remove(url);
+            result.Add(url);
+        }
+        return result;
+    }
 
     /// <summary>File paths that appear in the text and still exist, oldest first.</summary>
     private static List<string> FindPaths(string text)
@@ -394,21 +442,95 @@ public sealed partial class Store : Observable
                 if (FilePath(e.Text ?? "") is { } path) PreviewRequest = path;
                 break;
             case TermEventKind.Status:
+                var previous = tab.Runtime.StatusState;
                 Update(tab, rt =>
                 {
                     rt.StatusState = e.State;
+                    rt.StatusKind = e.StatusKind;
                     rt.StatusDetail = e.Text;
+                    rt.StatusChildren = e.Children ?? [];
                     if (e.State is StatusState.Blocked or StatusState.Done && !IsWatching(id)) rt.NeedsAttention = true;
                 });
+                if (e.State != previous) NotifyStatusChange(tab);
+                break;
+            case TermEventKind.Notification:
+                if (IsWatching(id)) return;
+                Update(tab, rt => rt.NeedsAttention = true);
+                if (Prefs.Current.NotifyPrograms) Notify(tab, e.Text ?? "", e.Title);
                 break;
         }
     }
 
+    /// <summary>
+    /// Notifies when a session you aren't looking at starts waiting on you, or finishes.
+    /// Only on a change of state, so a session that stays blocked notifies once.
+    /// </summary>
+    private void NotifyStatusChange(TabItem tab)
+    {
+        if (IsWatching(tab.Id) || tab.Runtime.StatusState is not { } state) return;
+        var enabled = state switch
+        {
+            StatusState.Blocked => Prefs.Current.NotifyNeedsYou,
+            StatusState.Done or StatusState.Error => Prefs.Current.NotifyDone,
+            _ => false,
+        };
+        if (enabled && tab.Runtime.StatusLine(showFolder: false) is { } line) Notify(tab, line);
+    }
+
+    /// <summary>The session's name as the title, its project (or the program's own title) under it.</summary>
+    private void Notify(TabItem tab, string body, string? subtitle = null) =>
+        Notifier.Post(tab.Id, tab.Name, subtitle ?? GroupContaining(tab.Id)?.Name, body);
+
+    /// <summary>Brings omux forward on a session, e.g. from a click on its notification.</summary>
+    public void Reveal(Guid id)
+    {
+        if (Tab(id) is null || Application.Current.MainWindow is not MainWindow window) return;
+        window.OpenFromOutside([]);
+        SelectedTabId = id;
+    }
+
     private bool IsWatching(Guid id) => SelectedTabId == id && Application.Current.MainWindow?.IsActive == true;
+
+    /// <summary>Flags a session for something that happened outside its terminal, like its pull request's checks failing.</summary>
+    public void RequestAttention(Guid id)
+    {
+        if (!IsWatching(id) && Tab(id) is { } tab) Update(tab, rt => rt.NeedsAttention = true);
+    }
 
     public void ClearAttention(Guid id)
     {
         if (Tab(id) is { } tab) Update(tab, rt => { rt.HasActivity = false; rt.NeedsAttention = false; });
+        Notifier.Clear(id);
+    }
+
+    /// <summary>Types text into a session's prompt as a paste; submit presses Enter after it.</summary>
+    public void SendText(Guid id, string text, bool submit)
+    {
+        if (!IsLive(id)) return;
+        _surface.Paste(id, text, submit);
+    }
+
+    /// <summary>
+    /// Answers Claude Code's permission prompt: Enter picks its default "Yes", Escape is
+    /// its "No, and tell Claude what to do differently".
+    /// </summary>
+    public void AnswerPermission(Guid id, bool allow)
+    {
+        if (!_terminals.TryGetValue(id, out var pty) || Tab(id) is not { Runtime.AwaitsPermission: true }) return;
+        pty.Write(allow ? "\r" : "\x1b");
+    }
+
+    /// <summary>Shows the right panel on the given tab.</summary>
+    public static void ShowPanel(PanelTab tab)
+    {
+        Prefs.Current.ShowFiles = true;
+        Prefs.Current.PanelTab = tab;
+    }
+
+    public void OpenAgentTranscript(SubAgent agent, Guid tabId)
+    {
+        OpenAgent = new AgentRef(tabId, agent);
+        ShowPanel(PanelTab.Files);
     }
 
     private void Update(TabItem tab, Action<TabRuntime> mutate)
@@ -428,7 +550,18 @@ public sealed partial class Store : Observable
             NewGroup();
             return;
         }
-        var tab = new TabItem($"Session {group.Tabs.Count + 1}", command: command);
+        if (command is null && group.UseWorktrees)
+        {
+            MainWindow.Instance.ShowNewWorktree(group.Id);
+            return;
+        }
+        AddSession(new TabItem($"Session {group.Tabs.Count + 1}", command: command), group.Id);
+    }
+
+    /// <summary>Adds a ready-made session to a project and starts it.</summary>
+    public void AddSession(TabItem tab, Guid groupId)
+    {
+        if (Group(groupId) is not { } group) return;
         group.Tabs.Add(tab);
         group.IsCollapsed = false;
         Touch(structural: true);
@@ -442,6 +575,9 @@ public sealed partial class Store : Observable
         KillTree(id);
         _surface.Destroy(id);
         _sizes.Remove(id);
+        Notifier.Clear(id);
+        BrowserPanel.Close(id);
+        if (OpenAgent?.TabId == id) OpenAgent = null;
         var group = Groups[loc.Group];
         if (group.Tabs[loc.Tab].Runtime.NeedsAttention) Update(group.Tabs[loc.Tab], rt => rt.NeedsAttention = false);
         group.Tabs.RemoveAt(loc.Tab);

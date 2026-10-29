@@ -23,6 +23,10 @@ public sealed class Prefs : Observable
     private bool _filesBrowserCollapsed;
     private bool _previewWrapLines = true;
     private string _shell = "";
+    private PanelTab _panelTab = PanelTab.Files;
+    private bool _notifyNeedsYou = true;
+    private bool _notifyDone;
+    private bool _notifyPrograms = true;
 
     public bool ConfirmQuit { get => _confirmQuit; set => Set(ref _confirmQuit, value); }
     public bool ShowFolderPath { get => _showFolderPath; set => Set(ref _showFolderPath, value); }
@@ -37,6 +41,11 @@ public sealed class Prefs : Observable
     public bool PreviewWrapLines { get => _previewWrapLines; set => Set(ref _previewWrapLines, value); }
     /// <summary>Shell executable for sessions; empty picks PowerShell 7, else Windows PowerShell.</summary>
     public string Shell { get => _shell; set => Set(ref _shell, value); }
+    /// <summary>The right panel's tab: Files, Changes or Browser.</summary>
+    public PanelTab PanelTab { get => _panelTab; set => Set(ref _panelTab, value); }
+    public bool NotifyNeedsYou { get => _notifyNeedsYou; set => Set(ref _notifyNeedsYou, value); }
+    public bool NotifyDone { get => _notifyDone; set => Set(ref _notifyDone, value); }
+    public bool NotifyPrograms { get => _notifyPrograms; set => Set(ref _notifyPrograms, value); }
 
     /// <summary>Last window placement, restored at launch.</summary>
     public WindowPlacement? Window { get; set; }
@@ -56,5 +65,7 @@ public sealed class Prefs : Observable
         catch { }
     }
 }
+
+public enum PanelTab { Files, Changes, Browser }
 
 public sealed record WindowPlacement(double Left, double Top, double Width, double Height, bool Maximized);
