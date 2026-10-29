@@ -4,7 +4,7 @@
 
 const host = window.chrome.webview;
 const root = document.getElementById('root');
-const sessions = new Map(); // id -> { term, fit, el, webgl, status: Map<string, record> }
+const sessions = new Map(); // id -> { term, fit, search, el, webgl, status: Map<string, record> }
 let current = null;
 let appearance = { theme: {}, fontFamily: 'Cascadia Mono, Consolas, monospace', fontSize: 13 };
 let shortcuts = []; // [{ name, code, ctrl, shift, alt }]
@@ -22,6 +22,7 @@ host.addEventListener('message', (event) => {
     case 'appearance': applyAppearance(m); break;
     case 'shortcuts': shortcuts = m.list; break;
     case 'focus': if (current) sessions.get(current)?.term.focus(); break;
+    case 'find': openFind(); break;
   }
 });
 
@@ -48,9 +49,14 @@ function create(id) {
   term.loadAddon(new WebLinksAddon.WebLinksAddon((e, uri) => {
     if (e.ctrlKey) post({ t: 'openUrl', url: uri });
   }));
+  const search = new SearchAddon.SearchAddon();
+  term.loadAddon(search);
+  search.onDidChangeResults(({ resultIndex, resultCount }) => {
+    if (id === current) showCount(resultIndex, resultCount);
+  });
   term.open(el);
 
-  const session = { term, fit, el, webgl: null, status: new Map() };
+  const session = { term, fit, search, el, webgl: null, status: new Map() };
   sessions.set(id, session);
 
   term.onData((d) => post({ t: 'in', id, d }));
@@ -151,6 +157,7 @@ function keyHandler(e, term) {
 
 function show(id) {
   if (current && current !== id) {
+    closeFind(false);
     const previous = sessions.get(current);
     if (previous) {
       previous.el.classList.remove('visible');
@@ -198,6 +205,8 @@ new ResizeObserver(() => fitCurrent()).observe(root);
 function applyAppearance(m) {
   appearance = { theme: m.theme, fontFamily: m.fontFamily, fontSize: m.fontSize };
   document.body.style.setProperty('--bg', m.theme.background);
+  document.body.style.setProperty('--fg', m.theme.foreground);
+  document.body.style.setProperty('--chrome', m.chrome);
   for (const { term } of sessions.values()) {
     term.options.theme = m.theme;
     term.options.fontFamily = m.fontFamily;
@@ -205,6 +214,62 @@ function applyAppearance(m) {
   }
   fitCurrent();
 }
+
+// MARK: Find (Ctrl+Shift+F)
+
+const find = document.getElementById('find');
+const findInput = document.getElementById('findInput');
+const findCount = document.getElementById('findCount');
+const searchOptions = {
+  decorations: {
+    matchBackground: '#FFD60A55', matchOverviewRuler: '#FFD60A',
+    activeMatchBackground: '#FF9F0A', activeMatchColorOverviewRuler: '#FF9F0A',
+  },
+};
+
+function openFind() {
+  if (!current) return;
+  find.classList.add('open');
+  findInput.focus();
+  findInput.select();
+  if (findInput.value) runFind(true);
+}
+
+function closeFind(refocus = true) {
+  if (!find.classList.contains('open')) return;
+  find.classList.remove('open');
+  const session = current && sessions.get(current);
+  if (!session) return;
+  session.search.clearDecorations();
+  session.term.clearSelection();
+  if (refocus) session.term.focus();
+}
+
+function runFind(forward, incremental = false) {
+  const session = current && sessions.get(current);
+  if (!session) return;
+  if (!findInput.value) {
+    session.search.clearDecorations();
+    showCount(-1, 0);
+    return;
+  }
+  const options = { ...searchOptions, incremental };
+  if (forward) session.search.findNext(findInput.value, options);
+  else session.search.findPrevious(findInput.value, options);
+}
+
+function showCount(index, count) {
+  findCount.textContent = !findInput.value ? '' : count === 0 ? 'No results' : index < 0 ? `${count}+` : `${index + 1} of ${count}`;
+}
+
+findInput.addEventListener('input', () => runFind(true, true));
+findInput.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') { e.preventDefault(); runFind(!e.shiftKey); }
+  else if (e.key === 'Escape') { e.preventDefault(); closeFind(); }
+});
+document.getElementById('findNext').addEventListener('click', () => runFind(true));
+document.getElementById('findPrev').addEventListener('click', () => runFind(false));
+document.getElementById('findClose').addEventListener('click', () => closeFind());
 
 // The host scans this for file paths mentioned in the session.
 window.omuxBufferText = (id) => {

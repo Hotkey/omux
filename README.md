@@ -98,10 +98,14 @@ Ctrl+T, Ctrl+R, Ctrl+K and Ctrl+O belong to Claude Code and the shell, so omux's
 | Jump to session | Ctrl+Shift+K |
 | Next / previous session | Ctrl+Tab / Ctrl+Shift+Tab |
 | Session 1–9 in the current project | Ctrl+1 … Ctrl+9 |
-| Files panel | Ctrl+Shift+F |
+| Files panel | Ctrl+Shift+E |
+| Find in session (Enter / Shift+Enter to step, Esc to close) | Ctrl+Shift+F |
+| Bigger / smaller / default text | Ctrl+= or Ctrl+Num + / Ctrl+- or Ctrl+Num - / Ctrl+0 |
 | Settings / quit | Ctrl+, / Alt+F4 |
 
 In a terminal, Ctrl+C copies when text is selected, Ctrl+V pastes, right-click copies the selection or pastes, and Ctrl-click opens a URL or previews a file path.
+
+When a session in the background rings the bell or waits for you, the taskbar button flashes and shows how many sessions are waiting.
 
 ### Privacy on Windows
 

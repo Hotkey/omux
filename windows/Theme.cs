@@ -46,7 +46,7 @@ public sealed record Theme(string Id, string Label, uint Background, uint Chrome
 
     public bool IsLight => Id is "light" or "solarizedLight";
 
-    private static string Css(uint hex) => "#" + hex.ToString("X6", CultureInfo.InvariantCulture);
+    public static string Css(uint hex) => "#" + hex.ToString("X6", CultureInfo.InvariantCulture);
 
     private static readonly string[] AnsiNames =
         ["black", "red", "green", "yellow", "blue", "magenta", "cyan", "white",

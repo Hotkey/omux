@@ -15,11 +15,11 @@
       <Setter Property="Margin" Value="28,0,0,6" />
     </Style>
   </Window.Resources>
-  <StackPanel Margin="20,4,20,20">
+  <StackPanel Margin="20,4,20,20" Grid.IsSharedSizeScope="True">
     <TextBlock Text="Appearance" Style="{StaticResource Section}" />
     <Grid>
       <Grid.ColumnDefinitions>
-        <ColumnDefinition Width="110" />
+        <ColumnDefinition Width="Auto" SharedSizeGroup="Label" />
         <ColumnDefinition Width="*" />
       </Grid.ColumnDefinitions>
       <Grid.RowDefinitions>
@@ -27,28 +27,32 @@
         <RowDefinition Height="Auto" />
         <RowDefinition Height="Auto" />
       </Grid.RowDefinitions>
-      <TextBlock Text="Theme" VerticalAlignment="Center" />
+      <TextBlock Text="Theme" VerticalAlignment="Center" Margin="0,0,12,0" />
       <ComboBox x:Name="ThemeBox" Grid.Column="1" Margin="0,3" DisplayMemberPath="Label" SelectedValuePath="Id"
                 SelectedValue="{Binding Theme}" />
-      <TextBlock Grid.Row="1" Text="Font" VerticalAlignment="Center" />
+      <TextBlock Grid.Row="1" Text="Font" VerticalAlignment="Center" Margin="0,0,12,0" />
       <ComboBox x:Name="FontBox" Grid.Row="1" Grid.Column="1" Margin="0,3" DisplayMemberPath="Label" SelectedValuePath="Value"
                 SelectedValue="{Binding FontFamily}" />
-      <TextBlock Grid.Row="2" Text="{Binding FontSize, StringFormat='Font size: {0} pt'}" VerticalAlignment="Center" />
+      <TextBlock Grid.Row="2" Text="{Binding FontSize, StringFormat='Font size: {0} pt'}" VerticalAlignment="Center" Margin="0,0,12,0" />
       <Slider Grid.Row="2" Grid.Column="1" Margin="0,6" Minimum="9" Maximum="24" TickFrequency="1" IsSnapToTickEnabled="True"
               Value="{Binding FontSize}" />
     </Grid>
 
     <TextBlock Text="Sidebar" Style="{StaticResource Section}" />
     <CheckBox Content="Show folder path under session name" IsChecked="{Binding ShowFolderPath}" />
-    <DockPanel Margin="0,6,0,0">
+    <Grid Margin="0,6,0,0">
+      <Grid.ColumnDefinitions>
+        <ColumnDefinition Width="Auto" SharedSizeGroup="Label" />
+        <ColumnDefinition Width="*" />
+      </Grid.ColumnDefinitions>
       <TextBlock Text="Check Claude limits every" VerticalAlignment="Center" Margin="0,0,12,0" />
-      <ComboBox SelectedValuePath="Tag" SelectedValue="{Binding UsageInterval}">
+      <ComboBox Grid.Column="1" SelectedValuePath="Tag" SelectedValue="{Binding UsageInterval}">
         <ComboBoxItem Content="1 minute"><ComboBoxItem.Tag><sys:Double>60</sys:Double></ComboBoxItem.Tag></ComboBoxItem>
         <ComboBoxItem Content="5 minutes"><ComboBoxItem.Tag><sys:Double>300</sys:Double></ComboBoxItem.Tag></ComboBoxItem>
         <ComboBoxItem Content="30 minutes"><ComboBoxItem.Tag><sys:Double>1800</sys:Double></ComboBoxItem.Tag></ComboBoxItem>
         <ComboBoxItem Content="Hour"><ComboBoxItem.Tag><sys:Double>3600</sys:Double></ComboBoxItem.Tag></ComboBoxItem>
       </ComboBox>
-    </DockPanel>
+    </Grid>
 
     <TextBlock Text="Files Panel" Style="{StaticResource Section}" />
     <CheckBox Content="Wrap long lines in file preview" IsChecked="{Binding PreviewWrapLines}" />
@@ -58,15 +62,24 @@
     <TextBlock Style="{StaticResource Hint}" Text="Off: restored sessions stay stopped until you press ▶. Clicking one only opens its shell." />
     <CheckBox Content="Confirm before quitting while sessions are running" IsChecked="{Binding ConfirmQuit}" />
     <TextBlock Style="{StaticResource Hint}" Text="Quitting always stops every session. Claude conversations resume on the next launch." />
-    <DockPanel Margin="0,6,0,0">
-      <TextBlock Text="Shell" VerticalAlignment="Center" Width="110" />
-      <Grid>
+    <Grid Margin="0,6,0,0">
+      <Grid.ColumnDefinitions>
+        <ColumnDefinition Width="Auto" SharedSizeGroup="Label" />
+        <ColumnDefinition Width="*" />
+      </Grid.ColumnDefinitions>
+      <Grid.RowDefinitions>
+        <RowDefinition Height="Auto" />
+        <RowDefinition Height="Auto" />
+      </Grid.RowDefinitions>
+      <TextBlock Text="Shell" VerticalAlignment="Center" Margin="0,0,12,0" />
+      <Grid Grid.Column="1">
         <TextBox Text="{Binding Shell, UpdateSourceTrigger=LostFocus}" x:Name="ShellBox" />
-        <TextBlock x:Name="ShellPrompt" Text="Automatic: PowerShell 7, else Windows PowerShell" IsHitTestVisible="False"
+        <TextBlock x:Name="ShellPrompt" Text="Automatic" IsHitTestVisible="False"
                    Margin="12,0" VerticalAlignment="Center" Foreground="{DynamicResource TertiaryBrush}" />
       </Grid>
-    </DockPanel>
-    <TextBlock Style="{StaticResource Hint}" Margin="110,2,0,6" Text="pwsh.exe, powershell.exe, cmd.exe or a full path. Applies to sessions started from now on." />
+      <TextBlock Grid.Row="1" Grid.Column="1" Style="{StaticResource Hint}" Margin="0,4,0,6"
+                 Text="Automatic uses PowerShell 7, else Windows PowerShell. Or name pwsh.exe, powershell.exe, cmd.exe or a full path; applies to sessions started from now on." />
+    </Grid>
 
     <TextBlock Text="Windows" Style="{StaticResource Section}" />
     <CheckBox x:Name="ExplorerMenu" Content="Add “Open in omux” to Explorer’s folder menu" Click="ExplorerMenu_Click" />

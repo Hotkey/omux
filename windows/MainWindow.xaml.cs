@@ -11,8 +11,11 @@ using Microsoft.Web.WebView2.Core;
 
 namespace Omux;
 
-/// <summary>A menu command and its keyboard shortcut (⌘ on macOS becomes Ctrl+Shift here).</summary>
-public sealed record AppCommand(string Name, string Title, Key Key, ModifierKeys Modifiers, Action Run)
+/// <summary>
+/// A menu command and its keyboard shortcut (⌘ on macOS becomes Ctrl+Shift here). AlternateKey
+/// takes the same modifiers, for keys some layouts lack (Turkish Q has no = key, so numpad + zooms).
+/// </summary>
+public sealed record AppCommand(string Name, string Title, Key Key, ModifierKeys Modifiers, Action Run, Key AlternateKey = Key.None)
 {
     public string Gesture
     {
@@ -23,26 +26,43 @@ public sealed record AppCommand(string Name, string Title, Key Key, ModifierKeys
             if (Modifiers.HasFlag(ModifierKeys.Control)) parts.Add("Ctrl");
             if (Modifiers.HasFlag(ModifierKeys.Shift)) parts.Add("Shift");
             if (Modifiers.HasFlag(ModifierKeys.Alt)) parts.Add("Alt");
-            parts.Add(Key switch
-            {
-                >= Key.D0 and <= Key.D9 => ((int)(Key - Key.D0)).ToString(CultureInfo.InvariantCulture),
-                Key.OemPeriod => ".",
-                Key.OemComma => ",",
-                Key.Enter => "Enter",
-                _ => Key.ToString(),
-            });
-            return string.Join('+', parts);
+            parts.Add(KeyName(Key));
+            var gesture = string.Join('+', parts);
+            return AlternateKey == Key.None ? gesture : $"{gesture} ({KeyName(AlternateKey)})";
         }
     }
 
-    /// <summary>The DOM KeyboardEvent.code, so the terminal page can hand the shortcut back.</summary>
-    public string? Code => Key switch
+    private static string KeyName(Key key) => key switch
     {
-        >= Key.A and <= Key.Z => "Key" + Key,
-        >= Key.D0 and <= Key.D9 => "Digit" + (int)(Key - Key.D0),
-        >= Key.F1 and <= Key.F12 => Key.ToString(),
-        Key.OemPeriod => "Period",
-        Key.OemComma => "Comma",
+        >= Key.D0 and <= Key.D9 => ((int)(key - Key.D0)).ToString(CultureInfo.InvariantCulture),
+        Key.OemPeriod => ".",
+        Key.OemComma => ",",
+        Key.OemPlus => "=",
+        Key.OemMinus => "-",
+        Key.Add => "Num +",
+        Key.Subtract => "Num -",
+        Key.Enter => "Enter",
+        _ => key.ToString(),
+    };
+
+    /// <summary>
+    /// The DOM KeyboardEvent.code, so the terminal page can hand the shortcut back. Codes name
+    /// physical keys, so punctuation (which moves between layouts) are left to WPF's own key handling.
+    /// </summary>
+    public string? Code => CodeOf(Key);
+
+    public string? AlternateCode => CodeOf(AlternateKey);
+
+    public bool Matches(Key key, ModifierKeys modifiers) =>
+        Key != Key.None && modifiers == Modifiers && (key == Key || (AlternateKey != Key.None && key == AlternateKey));
+
+    private static string? CodeOf(Key key) => key switch
+    {
+        >= Key.A and <= Key.Z => "Key" + key,
+        >= Key.D0 and <= Key.D9 => "Digit" + (int)(key - Key.D0),
+        >= Key.F1 and <= Key.F12 => key.ToString(),
+        Key.Add => "NumpadAdd",
+        Key.Subtract => "NumpadSubtract",
         Key.Enter => "Enter",
         Key.Tab => "Tab",
         _ => null,
@@ -60,6 +80,7 @@ public partial class MainWindow : Window
     private readonly string[] _launchFolders;
     private (string Name, DateTime At) _lastCommand;
     private double _filesWidth = 340;
+    private int _attentionCount;
 
     public MainWindow(string[] launchFolders)
     {
@@ -103,14 +124,14 @@ public partial class MainWindow : Window
         }
 
         TerminalSurface.Shared.ApplyAppearance(Theme.Current);
-        TerminalSurface.Shared.SetShortcuts(Commands.Where(c => c.Code is not null).Select(c => new
+        TerminalSurface.Shared.SetShortcuts(Commands.SelectMany(c => new[] { c.Code, c.AlternateCode }.OfType<string>().Select(code => new
         {
             name = c.Name,
-            code = c.Code,
+            code,
             ctrl = c.Modifiers.HasFlag(ModifierKeys.Control),
             shift = c.Modifiers.HasFlag(ModifierKeys.Shift),
             alt = c.Modifiers.HasFlag(ModifierKeys.Alt),
-        }));
+        })));
         _store.Load();
         Files.Initialize(WebEnvironment);
         OpenFromOutside(_launchFolders);
@@ -131,7 +152,10 @@ public partial class MainWindow : Window
             new("openFolder", "Open Folder…", Key.O, CtrlShift, _store.OpenFolderPanel),
             new("recentSessions", "Open Recent Claude Session…", Key.O, CtrlShiftAlt, ShowRecentSessions),
             new("closeSession", "Close Session", Key.W, CtrlShift, () => OnSelected(_store.CloseTab)),
-            new("filesPanel", "Files Panel", Key.F, CtrlShift, () => Prefs.Current.ShowFiles = !Prefs.Current.ShowFiles),
+            new("filesPanel", "Files Panel", Key.E, CtrlShift, () => Prefs.Current.ShowFiles = !Prefs.Current.ShowFiles),
+            new("zoomIn", "Bigger Text", Key.OemPlus, ModifierKeys.Control, () => Zoom(1), Key.Add),
+            new("zoomOut", "Smaller Text", Key.OemMinus, ModifierKeys.Control, () => Zoom(-1), Key.Subtract),
+            new("zoomReset", "Default Text Size", Key.D0, ModifierKeys.Control, () => Zoom(0)),
             new("rename", "Rename", Key.F2, ModifierKeys.None, () => _store.BeginRename(_store.SelectedTabId)),
             new("editSession", "Edit Session…", Key.I, CtrlShift, () => OnSelected(EditTab)),
             new("restartSession", "Restart Session", Key.R, CtrlShift, () => OnSelected(_store.Restart)),
@@ -139,6 +163,7 @@ public partial class MainWindow : Window
             new("killSession", "Kill Session", Key.None, ModifierKeys.None, () => OnSelected(_store.Kill)),
             new("continueClaude", "Continue Claude Conversation", Key.Enter, CtrlShift, () => OnSelected(_store.Start)),
             new("jumpToSession", "Jump to Session…", Key.K, CtrlShift, ShowQuickSwitcher),
+            new("find", "Find in Session…", Key.F, CtrlShift, () => { if (_store.SelectedTab is not null) TerminalSurface.Shared.Find(); }),
             new("nextSession", "Next Session", Key.Tab, ModifierKeys.Control, () => _store.SelectRelative(1)),
             new("previousSession", "Previous Session", Key.Tab, CtrlShift, () => _store.SelectRelative(-1)),
             new("settings", "Settings…", Key.OemComma, ModifierKeys.Control, ShowSettings),
@@ -165,11 +190,15 @@ public partial class MainWindow : Window
         Commands.FirstOrDefault(c => c.Name == name)?.Run();
     }
 
+    /// <summary>Steps the terminal font size; 0 goes back to the default 13 pt.</summary>
+    private static void Zoom(int step) =>
+        Prefs.Current.FontSize = step == 0 ? 13 : Math.Clamp(Fonts.TerminalSize + step, 9, 24);
+
     private void OnPreviewKeyDown(object sender, KeyEventArgs e)
     {
         var key = e.Key == Key.System ? e.SystemKey : e.Key;
         if (Keyboard.FocusedElement is TextBox && key == Key.F2) return;
-        var command = Commands.FirstOrDefault(c => c.Key != Key.None && c.Key == key && c.Modifiers == Keyboard.Modifiers);
+        var command = Commands.FirstOrDefault(c => c.Matches(key, Keyboard.Modifiers));
         if (command is null) return;
         e.Handled = true;
         // Run after the handler returns: a command that opens a modal dialog would otherwise keep
@@ -265,6 +294,9 @@ public partial class MainWindow : Window
     /// <summary>The taskbar button shows how many sessions wait on the user, like the Dock badge.</summary>
     private void UpdateBadge(int count)
     {
+        // A session newly waiting while omux is in the background flashes the taskbar button.
+        if (count > _attentionCount && !IsActive) Desktop.FlashTaskbar(this);
+        _attentionCount = count;
         if (count == 0)
         {
             Taskbar.Overlay = null;

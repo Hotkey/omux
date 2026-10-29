@@ -252,7 +252,7 @@ public partial class FilePanel : UserControl
         var collapsed = Prefs.Current.FilesBrowserCollapsed;
         BrowserRow.MinHeight = collapsed ? 28 : 80;
         BrowserRow.MaxHeight = collapsed ? 28 : double.PositiveInfinity;
-        BrowserRow.Height = new GridLength(collapsed ? 28 : 180);
+        BrowserRow.Height = collapsed ? new GridLength(28) : new GridLength(2, GridUnitType.Star);
         Splitter.IsEnabled = !collapsed;
         Tree.Visibility = collapsed ? Visibility.Collapsed : Visibility.Visible;
         SortPicker.Visibility = collapsed ? Visibility.Collapsed : Visibility.Visible;
