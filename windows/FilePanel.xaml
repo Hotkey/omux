@@ -11,8 +11,11 @@
       <RowDefinition x:Name="BrowserRow" Height="2*" MinHeight="80" />
     </Grid.RowDefinitions>
 
+    <!-- A subagent's transcript takes the preview's place while it is open. -->
+    <ContentControl x:Name="AgentHost" Focusable="False" Visibility="Collapsed" />
+
     <!-- Preview -->
-    <DockPanel Background="{DynamicResource BackgroundBrush}">
+    <DockPanel x:Name="PreviewArea" Background="{DynamicResource BackgroundBrush}">
       <Border DockPanel.Dock="Top" Height="28" BorderBrush="{DynamicResource SeparatorBrush}" BorderThickness="0,0,0,1"
               Background="{DynamicResource ChromeBrush}" x:Name="PreviewHeader" Visibility="Collapsed">
         <DockPanel Margin="10,0">

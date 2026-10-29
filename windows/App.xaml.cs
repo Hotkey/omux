@@ -23,6 +23,7 @@ public partial class App : Application
         }
 
         ApplyTheme();
+        Notifier.Activate();
         var window = new MainWindow(e.Args);
         MainWindow = window;
         window.Show();

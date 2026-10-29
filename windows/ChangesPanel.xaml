@@ -1,0 +1,175 @@
+<UserControl x:Class="Omux.ChangesPanel"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="clr-namespace:Omux"
+             Background="{DynamicResource BackgroundBrush}">
+  <UserControl.Resources>
+    <SolidColorBrush x:Key="Added" Color="#30D158" />
+    <SolidColorBrush x:Key="Removed" Color="#FF453A" />
+    <SolidColorBrush x:Key="NoteMark" Color="#FFD60A" />
+    <FontFamily x:Key="Mono">Cascadia Mono, Consolas</FontFamily>
+
+    <!-- Rows without selection chrome: the diff and its notes draw their own backgrounds. -->
+    <Style x:Key="PlainRow" TargetType="ListBoxItem">
+      <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+      <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="ListBoxItem">
+            <ContentPresenter />
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+
+    <!-- "+12 −3" or "binary". -->
+    <DataTemplate x:Key="Stat" DataType="{x:Type local:ChangedFile}">
+      <StackPanel Orientation="Horizontal" TextElement.FontFamily="{StaticResource Mono}" TextElement.FontSize="10" VerticalAlignment="Center">
+        <TextBlock Text="{Binding AddedText}" Foreground="{StaticResource Added}" Margin="4,0,0,0"
+                   Visibility="{Binding AddedText, Converter={StaticResource NotNull}}" />
+        <TextBlock Text="{Binding RemovedText}" Foreground="{StaticResource Removed}" Margin="4,0,0,0"
+                   Visibility="{Binding RemovedText, Converter={StaticResource NotNull}}" />
+        <TextBlock Text="binary" Foreground="{DynamicResource TertiaryBrush}" Margin="4,0,0,0"
+                   Visibility="{Binding IsBinary, Converter={StaticResource Visible}}" />
+      </StackPanel>
+    </DataTemplate>
+  </UserControl.Resources>
+
+  <DockPanel>
+    <!-- Footer: notes to send, and the worktree's pull request / merge actions. -->
+    <Border DockPanel.Dock="Bottom" x:Name="Footer" Height="40" Background="{DynamicResource ChromeBrush}"
+            BorderBrush="{DynamicResource SeparatorBrush}" BorderThickness="0,1,0,0">
+      <DockPanel Margin="10,0" TextElement.FontSize="12">
+        <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" VerticalAlignment="Center">
+          <TextBlock x:Name="Activity" Style="{StaticResource Caption}" FontSize="12" VerticalAlignment="Center" />
+          <StackPanel x:Name="GitActions" Orientation="Horizontal">
+            <Button x:Name="CreatePr" Content="Create PR" Click="CreatePr_Click" FontSize="12" Padding="10,3" MinHeight="0" />
+            <Button Style="{StaticResource IconButton}" Content="&#xE70D;" FontSize="9" Click="MoreGit_Click" Margin="2,0,0,0" ToolTip="More" />
+          </StackPanel>
+        </StackPanel>
+        <StackPanel x:Name="NotesBar" Orientation="Horizontal" VerticalAlignment="Center">
+          <TextBlock Text="&#xE90A;" FontFamily="{StaticResource IconFont}" Foreground="{StaticResource NoteMark}" VerticalAlignment="Center" />
+          <TextBlock x:Name="NoteCount" Margin="6,0,8,0" VerticalAlignment="Center" />
+          <Button Content="Send to Claude" Click="Send_Click" FontSize="12" Padding="10,3" MinHeight="0"
+                  ToolTip="Types the notes into the session and sends them" Style="{DynamicResource AccentButtonStyle}" />
+        </StackPanel>
+        <TextBlock x:Name="Hint" Text="Click a line to leave a note" Style="{StaticResource Caption}" FontSize="12" VerticalAlignment="Center" />
+      </DockPanel>
+    </Border>
+
+    <Grid>
+      <StackPanel x:Name="Placeholder" VerticalAlignment="Center" HorizontalAlignment="Center" Margin="20">
+        <TextBlock x:Name="PlaceholderTitle" FontSize="14" FontWeight="SemiBold" HorizontalAlignment="Center" />
+        <TextBlock x:Name="PlaceholderDetail" Style="{StaticResource Caption}" TextWrapping="Wrap" TextTrimming="None"
+                   TextAlignment="Center" Margin="0,6,0,0" MaxWidth="260" />
+      </StackPanel>
+
+      <Grid x:Name="Body">
+        <Grid.RowDefinitions>
+          <RowDefinition Height="*" MinHeight="160" />
+          <RowDefinition Height="5" />
+          <RowDefinition Height="220" MinHeight="110" />
+        </Grid.RowDefinitions>
+
+        <!-- The selected file's diff. -->
+        <DockPanel>
+          <Border DockPanel.Dock="Top" Height="28" BorderBrush="{DynamicResource SeparatorBrush}" BorderThickness="0,0,0,1">
+            <DockPanel Margin="10,0">
+              <Button DockPanel.Dock="Right" Style="{StaticResource IconButton}" Content="&#xE8A7;" Click="OpenFile_Click"
+                      ToolTip="Open with default app" Margin="6,0,0,0" />
+              <ContentControl DockPanel.Dock="Right" x:Name="FileStat" ContentTemplate="{StaticResource Stat}" />
+              <TextBlock x:Name="FileName" FontSize="11" FontWeight="SemiBold" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+              <TextBlock x:Name="FileFolder" FontSize="10" Foreground="{DynamicResource TertiaryBrush}" Margin="8,0,0,0"
+                         VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+            </DockPanel>
+          </Border>
+          <ListBox x:Name="DiffList" ItemContainerStyle="{StaticResource PlainRow}" Background="Transparent" BorderThickness="0"
+                   Padding="0,6" VirtualizingPanel.IsVirtualizing="True" VirtualizingPanel.ScrollUnit="Pixel"
+                   FontFamily="{StaticResource Mono}" FontSize="11">
+            <ListBox.ItemTemplate>
+              <DataTemplate DataType="{x:Type local:DiffRow}">
+                <StackPanel>
+                  <Grid Background="{Binding Background}" MouseLeftButtonUp="Line_Click" Cursor="Hand"
+                        ToolTip="Click to leave a note for Claude" ToolTipService.InitialShowDelay="1200">
+                    <Grid.ColumnDefinitions>
+                      <ColumnDefinition Width="42" />
+                      <ColumnDefinition Width="14" />
+                      <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Text="{Binding NumberText}" Foreground="{DynamicResource TertiaryBrush}" TextAlignment="Right" Margin="0,1,6,1" />
+                    <TextBlock Grid.Column="1" Text="{Binding Sign}" Foreground="{Binding SignBrush}" Margin="0,1" />
+                    <TextBlock Grid.Column="2" Text="{Binding Text}" TextWrapping="{Binding Wrapping}" Margin="0,1,8,1">
+                      <TextBlock.Style>
+                        <Style TargetType="TextBlock">
+                          <Setter Property="Foreground" Value="{DynamicResource ForegroundBrush}" />
+                          <Style.Triggers>
+                            <DataTrigger Binding="{Binding IsMeta}" Value="True">
+                              <Setter Property="Foreground" Value="{DynamicResource SecondaryBrush}" />
+                            </DataTrigger>
+                          </Style.Triggers>
+                        </Style>
+                      </TextBlock.Style>
+                    </TextBlock>
+                  </Grid>
+                  <!-- The note under its line. -->
+                  <Border Margin="56,3,10,3" Padding="8" CornerRadius="6" Background="{DynamicResource FieldBrush}"
+                          Visibility="{Binding NoteVisible, Converter={StaticResource Visible}}" MouseLeftButtonUp="Note_Click"
+                          TextElement.FontFamily="Segoe UI" TextElement.FontSize="12">
+                    <DockPanel>
+                      <TextBlock DockPanel.Dock="Left" Text="&#xE90A;" FontFamily="{StaticResource IconFont}" Foreground="{StaticResource NoteMark}"
+                                 Margin="0,2,6,0" />
+                      <Button DockPanel.Dock="Right" Style="{StaticResource IconButton}" Content="&#xE711;" FontSize="9"
+                              Click="RemoveNote_Click" ToolTip="Remove note" VerticalAlignment="Top" />
+                      <TextBlock Text="{Binding Note.Text}" TextWrapping="Wrap" />
+                    </DockPanel>
+                  </Border>
+                  <!-- Enter adds, Escape cancels. -->
+                  <DockPanel Margin="56,4,10,4" Visibility="{Binding IsEditing, Converter={StaticResource Visible}}"
+                             TextElement.FontFamily="Segoe UI">
+                    <Button DockPanel.Dock="Right" Content="Cancel" Click="CancelNote_Click" FontSize="12" Padding="8,2" MinHeight="0" Margin="6,0,0,0" />
+                    <Button DockPanel.Dock="Right" Content="Add" Click="SaveNote_Click" FontSize="12" Padding="8,2" MinHeight="0" Margin="6,0,0,0" />
+                    <TextBox Text="{Binding Draft, UpdateSourceTrigger=PropertyChanged}" FontSize="12" KeyDown="NoteBox_KeyDown"
+                             IsVisibleChanged="NoteBox_IsVisibleChanged" />
+                  </DockPanel>
+                </StackPanel>
+              </DataTemplate>
+            </ListBox.ItemTemplate>
+          </ListBox>
+        </DockPanel>
+
+        <GridSplitter Grid.Row="1" Style="{StaticResource Divider}" ResizeDirection="Rows" ResizeBehavior="PreviousAndNext" />
+
+        <!-- The changed files. -->
+        <DockPanel Grid.Row="2" Background="{DynamicResource ChromeBrush}">
+          <Border DockPanel.Dock="Top" Height="28" BorderBrush="{DynamicResource SeparatorBrush}" BorderThickness="0,0,0,1">
+            <DockPanel Margin="10,0">
+              <Button DockPanel.Dock="Right" Style="{StaticResource IconButton}" Content="&#xE8A7;" Click="OpenFolder_Click"
+                      ToolTip="Open folder in Explorer" Margin="4,0,0,0" />
+              <Button DockPanel.Dock="Right" Style="{StaticResource IconButton}" Content="&#xE72C;" Click="Refresh_Click" ToolTip="Refresh" />
+              <TextBlock x:Name="FileCount" FontSize="11" FontWeight="SemiBold" VerticalAlignment="Center" />
+              <TextBlock x:Name="BaseName" FontSize="10" Foreground="{DynamicResource TertiaryBrush}" Margin="8,0,0,0" VerticalAlignment="Center" />
+            </DockPanel>
+          </Border>
+          <ListBox x:Name="FileList" Background="Transparent" BorderThickness="0" ItemContainerStyle="{StaticResource SheetRow}"
+                   SelectionChanged="FileList_SelectionChanged" ScrollViewer.HorizontalScrollBarVisibility="Disabled" Padding="0,4">
+            <ListBox.ItemTemplate>
+              <DataTemplate DataType="{x:Type local:FileRow}">
+                <DockPanel Background="Transparent" MouseRightButtonUp="File_MouseRightButtonUp">
+                  <ContentControl DockPanel.Dock="Right" Content="{Binding File}" ContentTemplate="{StaticResource Stat}" />
+                  <TextBlock DockPanel.Dock="Right" Text="&#xE90A;" FontFamily="{StaticResource IconFont}" FontSize="10"
+                             Foreground="{StaticResource NoteMark}" Margin="4,0,0,0" VerticalAlignment="Center"
+                             Visibility="{Binding HasNote, Converter={StaticResource Visible}}" />
+                  <TextBlock Text="{Binding File.StatusLetter}" Foreground="{Binding File.StatusBrush}" FontFamily="{StaticResource Mono}"
+                             FontSize="10" FontWeight="Bold" Width="14" VerticalAlignment="Center" />
+                  <TextBlock Text="{Binding File.Name}" FontSize="12" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                  <TextBlock Text="{Binding File.Folder}" FontSize="11" Foreground="{DynamicResource TertiaryBrush}" Margin="6,0,0,0"
+                             VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                </DockPanel>
+              </DataTemplate>
+            </ListBox.ItemTemplate>
+          </ListBox>
+        </DockPanel>
+      </Grid>
+    </Grid>
+  </DockPanel>
+</UserControl>

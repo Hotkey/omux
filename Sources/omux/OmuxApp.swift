@@ -30,8 +30,12 @@ enum Prefs {
     static let filesByDate = "filesByDate"
     static let filesBrowserCollapsed = "filesBrowserCollapsed"
     static let previewWrapLines = "previewWrapLines"
+    static let panelTab = "panelTab"
     static let fontFamily = "fontFamily"
     static let fontSize = "fontSize"
+    static let notifyNeedsYou = "notifyNeedsYou"
+    static let notifyDone = "notifyDone"
+    static let notifyPrograms = "notifyPrograms"
 }
 
 struct SettingsView: View {
@@ -43,6 +47,9 @@ struct SettingsView: View {
     @AppStorage(Prefs.fontSize) private var fontSize = 13.0
     @AppStorage(Prefs.autoResume) private var autoResume = false
     @AppStorage(Prefs.previewWrapLines) private var wrapLines = true
+    @AppStorage(Prefs.notifyNeedsYou) private var notifyNeedsYou = true
+    @AppStorage(Prefs.notifyDone) private var notifyDone = false
+    @AppStorage(Prefs.notifyPrograms) private var notifyPrograms = true
 
     var body: some View {
         Form {
@@ -78,6 +85,14 @@ struct SettingsView: View {
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }
+            Section("Notifications") {
+                Toggle("When a session needs you", isOn: $notifyNeedsYou)
+                Toggle("When a session finishes", isOn: $notifyDone)
+                Toggle("When a program in a session sends one", isOn: $notifyPrograms)
+                Text("Only for sessions you aren't looking at. Programs send them with OSC 9 or OSC 777: set Claude Code's notification channel to ghostty (/config) to get its plugins' notifications too.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
         }
         .formStyle(.grouped)
         .frame(width: 460)
@@ -93,6 +108,12 @@ struct ContentView: View {
     @AppStorage(Prefs.showFiles) private var showFiles = false
 
     private var theme: Theme { Theme(rawValue: themeName) ?? .dark }
+
+    /// Changes follow the selected session and its folder.
+    private var changesKey: String {
+        let tab = store.selectedTab
+        return "\(tab?.id.uuidString ?? "")|\(tab?.directory ?? "")|\(tab?.worktree?.branch ?? "")"
+    }
 
     /// Folder the file panel shows: the selected session's folder, else its project's.
     private var projectRoot: URL {
@@ -120,19 +141,25 @@ struct ContentView: View {
                 }
                 .frame(minWidth: 360)
                 if showFiles {
-                    FilePanel(root: projectRoot, theme: theme)
-                        .frame(minWidth: 240, idealWidth: 340, maxWidth: 800)
+                    RightPanel(root: projectRoot, theme: theme)
+                        .frame(minWidth: 260, idealWidth: 380, maxWidth: 900)
                 }
             }
             .ignoresSafeArea(.container, edges: .top)
         }
-        .toolbar(.hidden, for: .windowToolbar)
+        // Hiding the toolbar itself also hides the window buttons on some macOS versions.
+        .toolbarBackground(.hidden, for: .windowToolbar)
         .preferredColorScheme(theme.colorScheme)
         .background(Color(nsColor: theme.chrome))
         .onChange(of: themeName) { _, _ in store.applyAppearance() }
         .onChange(of: fontFamily) { _, _ in store.applyAppearance() }
         .onChange(of: fontSize) { _, _ in store.applyAppearance() }
-        .onChange(of: store.previewRequest) { _, path in if path != nil { showFiles = true } }
+        .onChange(of: store.previewRequest) { _, path in if path != nil { store.showPanel(.files) } }
+        .onChange(of: changesKey, initial: true) { _, _ in
+            let tab = store.selectedTab
+            Changes.shared.track(tabID: tab?.id, dir: tab.flatMap(store.directory(of:)), worktree: tab?.worktree)
+        }
+        .sheet(item: $store.newWorktreeGroupID) { WorktreeSheet(groupID: $0).environmentObject(store) }
         .sheet(isPresented: $store.showQuickSwitcher) { QuickSwitcher().environmentObject(store) }
         .sheet(isPresented: $store.showRecentSessions) { RecentSessionsSheet().environmentObject(store) }
         .sheet(item: $store.editingTabID) { TabEditSheet(tabID: $0).environmentObject(store) }
@@ -163,8 +190,15 @@ struct SessionHeader: View {
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
                 }
+                if rt.awaitsPermission {
+                    PermissionButtons(tabID: tab.id).controlSize(.mini)
+                }
                 Spacer()
-                if let cwd = rt.cwd {
+                AgentPill(tabID: tab.id)
+                if let worktree = tab.worktree {
+                    PullRequestChip(tabID: tab.id)
+                    BranchChip(tabID: tab.id, worktree: worktree)
+                } else if let cwd = rt.cwd {
                     Text((cwd as NSString).abbreviatingWithTildeInPath)
                         .font(.caption2)
                         .foregroundStyle(.tertiary)
@@ -202,6 +236,10 @@ struct AppCommands: Commands {
         CommandGroup(replacing: .newItem) {
             Button("New Session") { store.newTab() }.keyboardShortcut("t")
             Button("New Shell") { store.newTab(command: "") }.keyboardShortcut("t", modifiers: [.command, .shift])
+            Button("New Session in Worktree…") {
+                if let id = store.selectedGroup?.id ?? store.groups.first?.id { store.newWorktreeGroupID = id }
+            }
+            .keyboardShortcut("t", modifiers: [.command, .option])
             Button("New Project") { store.newGroup() }.keyboardShortcut("n", modifiers: [.command, .shift])
             Divider()
             Button("Open Folder…") { store.openFolderPanel() }.keyboardShortcut("o")
@@ -209,7 +247,7 @@ struct AppCommands: Commands {
                 .keyboardShortcut("o", modifiers: [.command, .shift])
         }
         CommandGroup(replacing: .saveItem) {
-            Button("Close Session") { if let id = store.selectedTabID { store.closeTab(id) } }
+            Button("Close Session") { if let id = store.selectedTabID { store.requestClose(id) } }
                 .keyboardShortcut("w")
             Button("Close Window") { NSApp.keyWindow?.performClose(nil) }
                 .keyboardShortcut("w", modifiers: [.command, .shift])
@@ -219,6 +257,9 @@ struct AppCommands: Commands {
                 UserDefaults.standard.set(!UserDefaults.standard.bool(forKey: Prefs.showFiles), forKey: Prefs.showFiles)
             }
             .keyboardShortcut("f", modifiers: [.command, .option])
+            Button("Files") { store.showPanel(.files) }.keyboardShortcut("1", modifiers: [.command, .option])
+            Button("Changes") { store.showPanel(.changes) }.keyboardShortcut("2", modifiers: [.command, .option])
+            Button("Browser") { store.showPanel(.browser) }.keyboardShortcut("3", modifiers: [.command, .option])
         }
         CommandMenu("Session") {
             Button("Rename") { store.renamingID = store.selectedTabID }.keyboardShortcut("r")
@@ -262,6 +303,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         NSApp.servicesProvider = services
         NSUpdateDynamicServices()
+        Notifier.shared.activate()
     }
 
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool { false }

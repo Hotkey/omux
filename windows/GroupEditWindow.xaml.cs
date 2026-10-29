@@ -17,6 +17,7 @@ public partial class GroupEditWindow : Window
         NameBox.Text = group.Name;
         FolderBox.Text = group.Directory ?? "";
         CommandBox.Text = group.Command ?? "";
+        UseWorktrees.IsChecked = group.UseWorktrees;
         FolderBox.TextChanged += (_, _) => UpdatePrompts();
         CommandBox.TextChanged += (_, _) => UpdatePrompts();
         UpdatePrompts();
@@ -41,6 +42,7 @@ public partial class GroupEditWindow : Window
             if (NameBox.Text.Trim().Length > 0) group.Name = NameBox.Text;
             group.Directory = FolderBox.Text.Length == 0 ? null : FolderBox.Text;
             group.Command = CommandBox.Text;
+            group.UseWorktrees = UseWorktrees.IsChecked == true;
             _store.Touch();
         }
         Close();

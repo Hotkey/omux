@@ -60,6 +60,20 @@ public partial class SidebarView : UserControl
     private void Start_Click(object sender, RoutedEventArgs e) { if (Item(sender) is TabItem tab) _store.Start(tab.Id); }
     private void Collapse_Click(object sender, RoutedEventArgs e) { if (Item(sender) is TabGroup group) _store.ToggleCollapsed(group.Id); }
     private void GroupNewTab_Click(object sender, RoutedEventArgs e) { if (Item(sender) is TabGroup group) _store.NewTab(group.Id); }
+    private void DeleteWorktree_Click(object sender, RoutedEventArgs e) { if (Item(sender) is TabItem tab) _store.CleanUpMergedWorktree(tab.Id); }
+
+    /// <summary>A subagent row opens its transcript; the row's session is the list item around it.</summary>
+    private void Agent_Click(object sender, MouseButtonEventArgs e)
+    {
+        if (Item(sender) is not SubAgent agent) return;
+        for (DependencyObject? node = (DependencyObject)sender; node is not null; node = VisualTreeHelper.GetParent(node))
+        {
+            if (node is not ListBoxItem { DataContext: TabItem tab }) continue;
+            _store.SelectedTabId = tab.Id;
+            _store.OpenAgentTranscript(agent, tab.Id);
+            return;
+        }
+    }
 
     /// <summary>Every command with its shortcut — the menu bar of the macOS app.</summary>
     private void More_Click(object sender, RoutedEventArgs e)
@@ -79,8 +93,9 @@ public partial class SidebarView : UserControl
             }
             var group = command.Name switch
             {
-                "newSession" or "newShell" or "newProject" or "openFolder" or "recentSessions" => "file",
-                "closeSession" or "filesPanel" or "zoomIn" or "zoomOut" or "zoomReset" or "settings" or "quit" => "window",
+                "newSession" or "newShell" or "newWorktree" or "newProject" or "openFolder" or "recentSessions" => "file",
+                "closeSession" or "filesPanel" or "panelFiles" or "panelChanges" or "panelBrowser"
+                    or "zoomIn" or "zoomOut" or "zoomReset" or "settings" or "quit" => "window",
                 _ => "session",
             };
             if (section is not null && group != section) menu.Items.Add(new Separator());
@@ -145,11 +160,21 @@ public partial class SidebarView : UserControl
             foreach (var group in others) moveTo.Items.Add(Entry(group.Name, () => _store.MoveTab(tab.Id, group.Id)));
             menu.Items.Add(moveTo);
         }
+        if (tab.Worktree is { } worktree)
+        {
+            menu.Items.Add(new Separator());
+            var pr = tab.Runtime.PullRequest;
+            if (pr is { IsOpen: true }) menu.Items.Add(Entry($"Open Pull Request #{pr.Number}", () => Desktop.Open(pr.Url)));
+            else if (pr is { IsMerged: true }) menu.Items.Add(Entry("Delete Merged Worktree…", () => _store.CleanUpMergedWorktree(tab.Id)));
+            else menu.Items.Add(Entry("Create Pull Request…", () => _store.CreatePullRequest(tab.Id)));
+            menu.Items.Add(Entry($"Merge into {worktree.Base}", () => _store.MergeWorktree(tab.Id)));
+            menu.Items.Add(Entry("Open Worktree in Explorer", () => { if (_store.FolderOf(tab) is { } dir) Desktop.Open(dir); }));
+        }
         menu.Items.Add(new Separator());
         menu.Items.Add(Entry("Interrupt (Ctrl-C)", () => _store.Stop(tab.Id)));
         menu.Items.Add(Entry("Restart Session", () => _store.Restart(tab.Id)));
         menu.Items.Add(Entry("Kill Session", () => _store.Kill(tab.Id)));
-        menu.Items.Add(Entry("Close Session", () => _store.CloseTab(tab.Id)));
+        menu.Items.Add(Entry("Close Session", () => _store.RequestClose(tab.Id)));
         return menu;
     }
 
@@ -157,6 +182,7 @@ public partial class SidebarView : UserControl
     {
         var menu = new ContextMenu();
         menu.Items.Add(Entry("New Session", () => _store.NewTab(group.Id)));
+        menu.Items.Add(Entry("New Session in Worktree…", () => MainWindow.Instance.ShowNewWorktree(group.Id)));
         menu.Items.Add(Entry("New Shell", () => _store.NewTab(group.Id, command: "")));
         menu.Items.Add(new Separator());
         menu.Items.Add(Entry("Rename", () => _store.BeginRename(group.Id)));

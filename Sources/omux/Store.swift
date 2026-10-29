@@ -36,6 +36,16 @@ final class Store: ObservableObject {
     @Published var previewRequest: String?
     /// File paths mentioned in the selected session's output, newest last.
     @Published private(set) var mentionedPaths: [String] = []
+    /// Local server URLs (localhost, …) in the selected session's output, newest last.
+    @Published private(set) var mentionedURLs: [String] = []
+    /// The project a "New Session in Worktree" sheet is open for.
+    @Published var newWorktreeGroupID: UUID?
+    /// The subagent whose transcript the files panel shows.
+    @Published var openAgent: AgentRef?
+    /// A git action in progress per session ("Pushing…"), shown in the Changes tab.
+    @Published var gitActivity: [UUID: String] = [:]
+    /// One web view per session, kept while the session lives.
+    private var browsers: [UUID: BrowserSession] = [:]
 
     private var terminals: [UUID: TermView] = [:]
     private var cancellables = Set<AnyCancellable>()
@@ -136,7 +146,11 @@ final class Store: ObservableObject {
     private func makeTerminal(tab: TabItem, group: TabGroup, command: String? = nil) -> TermView {
         let view = TermView(tabID: tab.id)
         terminals[tab.id] = view
-        view.onEvent = { [weak self] event in self?.handle(event, for: tab.id) }
+        // A replaced view (restart) still reports its exit; only the current one may update the tab.
+        view.onEvent = { [weak self, weak view] event in
+            guard let self, let view, self.terminals[tab.id] === view else { return }
+            self.handle(event, for: tab.id)
+        }
         launch(view, tab: tab, group: group, command: command)
         return view
     }
@@ -172,7 +186,10 @@ final class Store: ObservableObject {
             execName: "-" + (shell as NSString).lastPathComponent,
             currentDirectory: dir
         )
-        update(tab.id) { $0.exited = false; $0.cwd = dir; $0.statusState = nil; $0.title = "" }
+        update(tab.id) {
+            $0.exited = false; $0.cwd = dir; $0.title = ""
+            $0.statusState = nil; $0.statusKind = nil; $0.statusDetail = nil; $0.statusChildren = []
+        }
 
         if let command = command ?? startupCommand(tab: tab, group: group), !command.isEmpty {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
@@ -205,16 +222,54 @@ final class Store: ObservableObject {
         update(id) { $0.exited = true; $0.statusState = nil; $0.busy = false }
     }
 
-    /// Rescans the selected session's scrollback for file paths (background, cheap).
+    /// Rescans the selected session's scrollback for file paths and local URLs (background, cheap).
     func scanMentionedPaths() {
-        guard let id = selectedTabID, let view = terminals[id] else { mentionedPaths = []; return }
-        Task.detached { [weak self] in
-            let paths = view.mentionedPaths()
-            await MainActor.run { [weak self] in
-                guard let self, self.selectedTabID == id, self.mentionedPaths != paths else { return }
-                self.mentionedPaths = paths
-            }
+        guard let id = selectedTabID, let view = terminals[id] else { mentionedPaths = []; mentionedURLs = []; return }
+        // Read the buffer on the main actor; match and check files off it.
+        let text = view.scrollbackText()
+        Task { [weak self] in
+            let (paths, urls) = await Task.detached {
+                (TermView.mentionedPaths(in: text), TermView.mentionedLocalURLs(in: text))
+            }.value
+            guard let self, self.selectedTabID == id else { return }
+            if self.mentionedPaths != paths { self.mentionedPaths = paths }
+            if self.mentionedURLs != urls { self.mentionedURLs = urls }
         }
+    }
+
+    /// Types text into a session's prompt as a paste; `submit` presses Return after it.
+    func sendText(_ text: String, to id: UUID, submit: Bool) {
+        guard let view = terminals[id], !(runtime[id]?.exited ?? true) else { return }
+        view.paste(text)
+        if submit {
+            // A beat later, so the program has taken the paste before Return arrives.
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { view.send(txt: "\r") }
+        }
+    }
+
+    /// Answers Claude Code's permission prompt: Return picks its default "Yes",
+    /// Escape is its "No, and tell Claude what to do differently".
+    func answerPermission(_ id: UUID, allow: Bool) {
+        guard let view = terminals[id], runtime[id]?.awaitsPermission == true else { return }
+        view.send(txt: allow ? "\r" : "\u{1b}")
+    }
+
+    /// Shows the right panel on the given tab.
+    func showPanel(_ tab: PanelTab) {
+        UserDefaults.standard.set(true, forKey: Prefs.showFiles)
+        UserDefaults.standard.set(tab.rawValue, forKey: Prefs.panelTab)
+    }
+
+    func openAgentTranscript(_ agent: SubAgent, in tabID: UUID) {
+        openAgent = AgentRef(tabID: tabID, agent: agent)
+        showPanel(.files)
+    }
+
+    func browser(for id: UUID) -> BrowserSession {
+        if let browser = browsers[id] { return browser }
+        let browser = BrowserSession(tabID: id)
+        browsers[id] = browser
+        return browser
     }
 
     /// Re-checks whether the shell has a child process (claude, a build, …).
@@ -334,24 +389,69 @@ final class Store: ObservableObject {
         case .directory(let dir):
             update(id) { $0.cwd = dir }
         case .exited:
-            update(id) { $0.exited = true; $0.statusState = nil; $0.busy = false }
+            update(id) { $0.exited = true; $0.statusState = nil; $0.statusKind = nil; $0.statusChildren = []; $0.busy = false }
         case .openPath(let path):
             previewRequest = path
-        case .status(let state, let detail):
+        case .status(let state, let kind, let message, let children):
+            let previous = runtime[id]?.statusState
             update(id) {
                 $0.statusState = state
-                $0.statusDetail = detail
+                $0.statusKind = kind
+                $0.statusDetail = message
+                $0.statusChildren = children
                 if state == .blocked || state == .done, !isWatching(id) { $0.needsAttention = true }
             }
+            if state != previous { notifyStatusChange(id) }
+        case .notification(let title, let body):
+            guard !isWatching(id) else { return }
+            update(id) { $0.needsAttention = true }
+            if UserDefaults.standard.object(forKey: Prefs.notifyPrograms) as? Bool ?? true {
+                notify(id, subtitle: title, body: body)
+            }
         }
+    }
+
+    /// Notifies when a session you aren't looking at starts waiting on you, or finishes.
+    /// Only on a change of state, so a session that stays blocked notifies once.
+    private func notifyStatusChange(_ id: UUID) {
+        guard !isWatching(id), let rt = runtime[id], let state = rt.statusState else { return }
+        let enabled: Bool
+        switch state {
+        case .blocked: enabled = UserDefaults.standard.object(forKey: Prefs.notifyNeedsYou) as? Bool ?? true
+        case .done, .error: enabled = UserDefaults.standard.bool(forKey: Prefs.notifyDone)
+        case .idle, .working: enabled = false
+        }
+        guard enabled, let line = rt.statusLine(showFolder: false) else { return }
+        notify(id, body: line)
+    }
+
+    /// The session's name as the title, its project (or the program's own title) under it.
+    private func notify(_ id: UUID, subtitle: String? = nil, body: String) {
+        guard let tab = tab(id) else { return }
+        Notifier.shared.post(tabID: id, title: tab.name, subtitle: subtitle ?? group(containing: id)?.name, body: body)
+    }
+
+    /// Brings omux forward on a session, e.g. from a click on its notification.
+    func reveal(_ id: UUID) {
+        guard tab(id) != nil else { return }
+        AppDelegate.openWindow?(id: "main")
+        NSApp.activate()
+        selectedTabID = id
     }
 
     private func isWatching(_ id: UUID) -> Bool {
         selectedTabID == id && NSApp.isActive && NSApp.keyWindow != nil
     }
 
+    /// Flags a session for something that happened outside its terminal, like its pull
+    /// request's checks failing.
+    func requestAttention(_ id: UUID) {
+        if !isWatching(id) { update(id) { $0.needsAttention = true } }
+    }
+
     private func clearAttention(_ id: UUID) {
         update(id) { $0.hasActivity = false; $0.needsAttention = false }
+        Notifier.shared.clear(tabID: id)
     }
 
     private func update(_ id: UUID, _ mutate: (inout TabRuntime) -> Void) {
@@ -368,7 +468,20 @@ final class Store: ObservableObject {
             newGroup()
             return
         }
+        if command == nil, groups[gi].useWorktrees {
+            newWorktreeGroupID = groups[gi].id
+            return
+        }
         let tab = TabItem(name: "Session \(groups[gi].tabs.count + 1)", command: command)
+        groups[gi].tabs.append(tab)
+        groups[gi].isCollapsed = false
+        makeTerminal(tab: tab, group: groups[gi])
+        selectedTabID = tab.id
+    }
+
+    /// Adds a ready-made session to a project and starts it.
+    func addSession(_ tab: TabItem, to groupID: UUID) {
+        guard let gi = groups.firstIndex(where: { $0.id == groupID }) else { return }
         groups[gi].tabs.append(tab)
         groups[gi].isCollapsed = false
         makeTerminal(tab: tab, group: groups[gi])
@@ -382,6 +495,9 @@ final class Store: ObservableObject {
             view.removeFromSuperview()
         }
         runtime[id] = nil
+        Notifier.shared.clear(tabID: id)
+        browsers.removeValue(forKey: id)?.close()
+        if openAgent?.tabID == id { openAgent = nil }
         groups[loc.group].tabs.remove(at: loc.tab)
         if selectedTabID == id {
             let siblings = groups[loc.group].tabs

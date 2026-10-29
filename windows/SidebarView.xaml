@@ -100,17 +100,71 @@
           <ColumnDefinition Width="*" />
           <ColumnDefinition Width="Auto" />
         </Grid.ColumnDefinitions>
-        <Ellipse Width="8" Height="8" Fill="{Binding DotBrush}" VerticalAlignment="Center" Margin="0,0,8,0" />
+        <!-- Top-aligned so the dot stays beside the name when agent rows or buttons follow. -->
+        <Ellipse Width="8" Height="8" Fill="{Binding DotBrush}" VerticalAlignment="Top" Margin="0,6,8,0" />
         <StackPanel Grid.Column="1" VerticalAlignment="Center">
           <TextBlock Text="{Binding Name}" FontSize="13" TextTrimming="CharacterEllipsis"
                      Visibility="{Binding IsRenaming, Converter={StaticResource Hidden}}" />
           <TextBox Text="{Binding Name, Mode=OneWay}" Style="{StaticResource RenameBox}"
                    Visibility="{Binding IsRenaming, Converter={StaticResource Visible}}"
                    IsVisibleChanged="RenameBox_IsVisibleChanged" KeyDown="RenameBox_KeyDown" LostKeyboardFocus="RenameBox_LostFocus" />
-          <TextBlock Text="{Binding Runtime.SidebarLine}" Style="{StaticResource Caption}" Margin="0,1,0,0"
-                     Visibility="{Binding Runtime.SidebarLine, Converter={StaticResource NotNull}}" />
+          <DockPanel Margin="0,1,0,0" Visibility="{Binding SidebarLine, Converter={StaticResource NotNull}}">
+            <TextBlock Text="&#x2442;" FontFamily="Segoe UI Symbol" FontSize="12" Margin="0,-1,4,0"
+                       Foreground="{DynamicResource SecondaryBrush}" Visibility="{Binding Worktree, Converter={StaticResource NotNull}}" />
+            <!-- ● #42 after the branch: the pull request and its state. -->
+            <StackPanel DockPanel.Dock="Right" Orientation="Horizontal" Margin="4,0,0,0"
+                        Visibility="{Binding Runtime.PullRequest, Converter={StaticResource NotNull}}"
+                        ToolTip="{Binding Runtime.PullRequest.Summary}">
+              <Ellipse Width="5" Height="5" Fill="{Binding Runtime.PullRequest.Brush}" VerticalAlignment="Center" Margin="0,0,3,0" />
+              <TextBlock Text="{Binding Runtime.PullRequest.Number, StringFormat='#{0}'}" Style="{StaticResource Caption}" />
+            </StackPanel>
+            <TextBlock Text="{Binding SidebarLine}" Style="{StaticResource Caption}" />
+          </DockPanel>
+          <local:PermissionButtons TabId="{Binding Id}" HorizontalAlignment="Left" Margin="0,4,0,1"
+                                   Visibility="{Binding Runtime.AwaitsPermission, Converter={StaticResource Visible}}" />
+          <Button Content="Delete Worktree" HorizontalAlignment="Left" Margin="0,4,0,1" FontSize="11" Padding="10,1,10,2" MinHeight="0"
+                  Focusable="False" Click="DeleteWorktree_Click"
+                  ToolTip="The pull request was merged. Close this session and delete its worktree and branch."
+                  Visibility="{Binding Runtime.PullRequest.IsMerged, Converter={StaticResource Visible}, FallbackValue=Collapsed}" />
+          <!-- Every subagent of the selected session, and those that need you in any session. -->
+          <ItemsControl ItemsSource="{Binding SidebarAgents}" Margin="0,3,0,0" Focusable="False">
+            <ItemsControl.ItemTemplate>
+              <DataTemplate DataType="{x:Type local:SubAgent}">
+                <!-- Mouse up rather than a Button's click: the row also selects its session, and the transcript shows for the selected one. -->
+                <Border MouseLeftButtonUp="Agent_Click" ToolTip="{Binding Tooltip}" Cursor="Hand" CornerRadius="4" Padding="4,1">
+                  <Border.Style>
+                    <Style TargetType="Border">
+                      <Setter Property="Background" Value="Transparent" />
+                      <Style.Triggers>
+                        <Trigger Property="IsMouseOver" Value="True">
+                          <Setter Property="Background" Value="{DynamicResource HoverBrush}" />
+                        </Trigger>
+                      </Style.Triggers>
+                    </Style>
+                  </Border.Style>
+                  <DockPanel Margin="{Binding Indent}" TextElement.FontSize="11">
+                    <TextBlock DockPanel.Dock="Right" Text="{Binding ShortActivity}" FontSize="10" Margin="4,0,0,0" VerticalAlignment="Center">
+                      <TextBlock.Style>
+                        <Style TargetType="TextBlock">
+                          <Setter Property="Foreground" Value="{DynamicResource SecondaryBrush}" />
+                          <Style.Triggers>
+                            <DataTrigger Binding="{Binding Blocked}" Value="True">
+                              <Setter Property="Foreground" Value="#FF9F0A" />
+                            </DataTrigger>
+                          </Style.Triggers>
+                        </Style>
+                      </TextBlock.Style>
+                    </TextBlock>
+                    <Ellipse Width="7" Height="7" Stroke="{Binding Brush}" Fill="{Binding DotFill}" StrokeThickness="1.5"
+                             VerticalAlignment="Center" Margin="0,0,6,0" />
+                    <TextBlock Text="{Binding Description}" TextTrimming="CharacterEllipsis" Foreground="{DynamicResource ForegroundBrush}" />
+                  </DockPanel>
+                </Border>
+              </DataTemplate>
+            </ItemsControl.ItemTemplate>
+          </ItemsControl>
         </StackPanel>
-        <Grid Grid.Column="2" VerticalAlignment="Center" Margin="4,0,0,0">
+        <Grid Grid.Column="2" VerticalAlignment="Top" Margin="4,2,0,0">
           <StackPanel Orientation="Horizontal" Style="{StaticResource OnHover}">
             <Button Style="{StaticResource IconButton}" Content="&#xE71A;" FontSize="10" Click="Stop_Click" ToolTip="Interrupt (Ctrl-C)"
                     Visibility="{Binding Runtime.Busy, Converter={StaticResource Visible}}" />

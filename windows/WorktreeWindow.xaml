@@ -1,0 +1,50 @@
+<Window x:Class="Omux.WorktreeWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="New Session in Worktree" Width="480" SizeToContent="Height" ResizeMode="NoResize" ShowInTaskbar="False"
+        WindowStartupLocation="CenterOwner" Background="{DynamicResource ChromeBrush}" Foreground="{DynamicResource ForegroundBrush}">
+  <StackPanel Margin="20">
+    <TextBlock Text="Claude works on its own branch in its own folder, so sessions don't touch each other's files."
+               Style="{StaticResource Caption}" FontSize="12" TextWrapping="Wrap" TextTrimming="None" />
+
+    <TextBlock x:Name="NotRepo" Foreground="#FF9F0A" TextWrapping="Wrap" Margin="0,16,0,0" Visibility="Collapsed" />
+
+    <Grid x:Name="Fields" Margin="0,12,0,0">
+      <Grid.ColumnDefinitions>
+        <ColumnDefinition Width="Auto" />
+        <ColumnDefinition Width="*" />
+      </Grid.ColumnDefinitions>
+      <Grid.RowDefinitions>
+        <RowDefinition Height="Auto" />
+        <RowDefinition Height="Auto" />
+        <RowDefinition Height="Auto" />
+        <RowDefinition Height="Auto" />
+        <RowDefinition Height="Auto" />
+      </Grid.RowDefinitions>
+
+      <TextBlock Text="Name" VerticalAlignment="Center" Margin="0,0,12,0" />
+      <TextBox x:Name="NameBox" Grid.Column="1" Margin="0,4" TextChanged="NameBox_TextChanged" />
+
+      <TextBlock Grid.Row="1" Text="Branch" VerticalAlignment="Center" Margin="0,0,12,0" />
+      <TextBox x:Name="BranchBox" Grid.Row="1" Grid.Column="1" Margin="0,4" FontFamily="Cascadia Mono, Consolas"
+               TextChanged="BranchBox_TextChanged" />
+
+      <TextBlock Grid.Row="2" Text="From" VerticalAlignment="Center" Margin="0,0,12,0" />
+      <ComboBox x:Name="BaseBox" Grid.Row="2" Grid.Column="1" Margin="0,4" HorizontalAlignment="Stretch" />
+
+      <TextBlock Grid.Row="3" Text="Folder" VerticalAlignment="Center" Margin="0,0,12,0" />
+      <TextBlock x:Name="FolderText" Grid.Row="3" Grid.Column="1" Margin="0,6" FontFamily="Cascadia Mono, Consolas" FontSize="11"
+                 Foreground="{DynamicResource SecondaryBrush}" TextTrimming="CharacterEllipsis" />
+
+      <CheckBox x:Name="UseWorktrees" Grid.Row="4" Grid.ColumnSpan="2" Margin="0,10,0,0" Click="UseWorktrees_Click" />
+    </Grid>
+
+    <TextBox x:Name="Error" Style="{StaticResource SelectableText}" Foreground="#FF453A" Margin="0,12,0,0" Visibility="Collapsed" />
+
+    <StackPanel Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,20,0,0">
+      <ProgressBar x:Name="Working" IsIndeterminate="True" Width="60" Height="4" Margin="0,0,12,0" Visibility="Collapsed" />
+      <Button Content="Cancel" IsCancel="True" MinWidth="80" Margin="0,0,8,0" />
+      <Button x:Name="CreateButton" Content="Create" IsDefault="True" MinWidth="80" Click="Create_Click" Style="{DynamicResource AccentButtonStyle}" />
+    </StackPanel>
+  </StackPanel>
+</Window>

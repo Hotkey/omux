@@ -8,9 +8,14 @@ using Microsoft.Web.WebView2.Wpf;
 
 namespace Omux;
 
-public enum TermEventKind { Bell, Title, Directory, Status, OpenPath }
+public enum TermEventKind { Bell, Title, Directory, Status, OpenPath, Notification }
 
-public sealed record TermEvent(TermEventKind Kind, string? Text = null, StatusState? State = null);
+/// <summary>
+/// Status carries the root record's state, Kind and Text (its message) plus every other
+/// record; Notification carries Title and Text (the body) from OSC 9 or OSC 777.
+/// </summary>
+public sealed record TermEvent(TermEventKind Kind, string? Text = null, StatusState? State = null,
+    string? StatusKind = null, IReadOnlyList<StatusChild>? Children = null, string? Title = null);
 
 /// <summary>
 /// One WebView2 that renders every session's terminal (xterm.js, one instance per session).
@@ -64,7 +69,7 @@ public sealed class TerminalSurface : ContentControl
     {
         using var doc = JsonDocument.Parse(e.WebMessageAsJson);
         var m = doc.RootElement;
-        string Str(string name) => m.TryGetProperty(name, out var v) && v.ValueKind == JsonValueKind.String ? v.GetString()! : "";
+        string Str(string name) => Text(m, name) ?? "";
         Guid Id() => Guid.TryParse(Str("id"), out var id) ? id : Guid.Empty;
 
         switch (Str("t"))
@@ -82,13 +87,22 @@ public sealed class TerminalSurface : ContentControl
             case "openPath": TermEvent?.Invoke(Id(), new(TermEventKind.OpenPath, Str("path"))); break;
             case "openUrl": Desktop.Open(Str("url")); break;
             case "shortcut": Shortcut?.Invoke(Str("name")); break;
+            case "notify": TermEvent?.Invoke(Id(), new(TermEventKind.Notification, Str("body"), Title: Text(m, "title"))); break;
             case "status":
-                StatusState? state = Enum.TryParse<StatusState>(Str("state"), ignoreCase: true, out var parsed) ? parsed : null;
-                var detail = Str("detail");
-                TermEvent?.Invoke(Id(), new(TermEventKind.Status, detail.Length > 0 ? detail : null, state));
+                var children = m.TryGetProperty("children", out var list) && list.ValueKind == JsonValueKind.Array
+                    ? list.EnumerateArray().Select(c => new StatusChild(Text(c, "id") ?? "", State(c), Text(c, "kind"), Text(c, "message"), Text(c, "title"))).ToList()
+                    : [];
+                TermEvent?.Invoke(Id(), new(TermEventKind.Status, Text(m, "message"), State(m), Text(m, "kind"), children));
                 break;
         }
     }
+
+    /// <summary>A non-empty string property, else null.</summary>
+    private static string? Text(JsonElement element, string name) =>
+        element.TryGetProperty(name, out var v) && v.ValueKind == JsonValueKind.String && v.GetString() is { Length: > 0 } s ? s : null;
+
+    private static StatusState? State(JsonElement element) =>
+        Enum.TryParse<StatusState>(Text(element, "state"), ignoreCase: true, out var parsed) ? parsed : null;
 
     private void Post(object message)
     {
@@ -136,6 +150,9 @@ public sealed class TerminalSurface : ContentControl
     }
 
     public void SetShortcuts(IEnumerable<object> list) => Post(new { t = "shortcuts", list });
+
+    /// <summary>Types text into a session's prompt as a paste; submit presses Enter after it.</summary>
+    public void Paste(Guid id, string text, bool submit) => Post(new { t = "paste", id, text, submit });
 
     /// <summary>Output may arrive on any thread; it is batched and written on the UI thread.</summary>
     public void Write(Guid id, string data)

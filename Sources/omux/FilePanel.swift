@@ -95,7 +95,9 @@ struct FilePanel: View {
     var body: some View {
         VSplitView {
             Group {
-                if let url = previewURL {
+                if let agent = store.openAgent, agent.tabID == store.selectedTabID {
+                    AgentTranscriptView(ref: agent).id(agent.agentID)
+                } else if let url = previewURL {
                     FilePreview(url: url)
                 } else {
                     Text("Select a file to preview")
@@ -202,6 +204,7 @@ struct FilePanel: View {
         .onChange(of: byDate) { _, _ in refresh() }
         .onChange(of: selected) { _, path in
             guard let path else { return }
+            store.openAgent = nil
             var isDir: ObjCBool = false
             if FileManager.default.fileExists(atPath: path, isDirectory: &isDir), !isDir.boolValue {
                 previewURL = URL(fileURLWithPath: path)
@@ -218,6 +221,7 @@ struct FilePanel: View {
 
     private func showRequested() {
         guard let path = store.previewRequest else { return }
+        store.openAgent = nil
         previewURL = URL(fileURLWithPath: path)
         selected = path
         store.previewRequest = nil

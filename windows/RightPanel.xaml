@@ -1,0 +1,68 @@
+<UserControl x:Class="Omux.RightPanel"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:local="clr-namespace:Omux">
+  <UserControl.Resources>
+    <Style x:Key="PanelTabButton" TargetType="Button">
+      <Setter Property="Foreground" Value="{DynamicResource SecondaryBrush}" />
+      <Setter Property="Background" Value="Transparent" />
+      <Setter Property="Focusable" Value="False" />
+      <Setter Property="FontSize" Value="11" />
+      <Setter Property="FontWeight" Value="Medium" />
+      <Setter Property="Height" Value="22" />
+      <Setter Property="Margin" Value="0,0,2,0" />
+      <Setter Property="Padding" Value="8,0" />
+      <Setter Property="Template">
+        <Setter.Value>
+          <ControlTemplate TargetType="Button">
+            <Border Background="{TemplateBinding Background}" CornerRadius="5" Padding="{TemplateBinding Padding}" x:Name="Chrome">
+              <ContentPresenter VerticalAlignment="Center" />
+            </Border>
+            <ControlTemplate.Triggers>
+              <Trigger Property="IsMouseOver" Value="True">
+                <Setter Property="Foreground" Value="{DynamicResource ForegroundBrush}" />
+              </Trigger>
+            </ControlTemplate.Triggers>
+          </ControlTemplate>
+        </Setter.Value>
+      </Setter>
+    </Style>
+  </UserControl.Resources>
+
+  <DockPanel>
+    <Border DockPanel.Dock="Top" Height="28" Background="{DynamicResource ChromeBrush}"
+            BorderBrush="{DynamicResource SeparatorBrush}" BorderThickness="0,0,0,1">
+      <StackPanel Orientation="Horizontal" Margin="6,0" VerticalAlignment="Center">
+        <Button x:Name="FilesTab" Style="{StaticResource PanelTabButton}" Click="FilesTab_Click" ToolTip="Files (Ctrl+Shift+1)">
+          <StackPanel Orientation="Horizontal">
+            <TextBlock Text="&#xE8A5;" FontFamily="{StaticResource IconFont}" FontSize="10" VerticalAlignment="Center" Margin="0,0,5,0" />
+            <TextBlock Text="Files" VerticalAlignment="Center" />
+          </StackPanel>
+        </Button>
+        <Button x:Name="ChangesTab" Style="{StaticResource PanelTabButton}" Click="ChangesTab_Click" ToolTip="Changes (Ctrl+Shift+2)">
+          <StackPanel Orientation="Horizontal">
+            <TextBlock Text="&#xE8F1;" FontFamily="{StaticResource IconFont}" FontSize="10" VerticalAlignment="Center" Margin="0,0,5,0" />
+            <TextBlock Text="Changes" VerticalAlignment="Center" />
+            <Border x:Name="ChangesBadge" CornerRadius="7" MinWidth="15" Height="14" Padding="4,0" Margin="5,0,0,0"
+                    Background="{DynamicResource SelectionBrush}" Visibility="Collapsed">
+              <TextBlock x:Name="ChangesCount" FontSize="9" FontWeight="SemiBold" HorizontalAlignment="Center" VerticalAlignment="Center" />
+            </Border>
+          </StackPanel>
+        </Button>
+        <Button x:Name="BrowserTab" Style="{StaticResource PanelTabButton}" Click="BrowserTab_Click" ToolTip="Browser (Ctrl+Shift+3)">
+          <StackPanel Orientation="Horizontal">
+            <TextBlock Text="&#xE774;" FontFamily="{StaticResource IconFont}" FontSize="10" VerticalAlignment="Center" Margin="0,0,5,0" />
+            <TextBlock Text="Browser" VerticalAlignment="Center" />
+          </StackPanel>
+        </Button>
+      </StackPanel>
+    </Border>
+
+    <Grid>
+      <!-- Files stays alive so its preview and scroll position survive tab switches. -->
+      <local:FilePanel x:Name="Files" />
+      <local:ChangesPanel x:Name="ChangesView" Visibility="Collapsed" />
+      <local:BrowserPanel x:Name="BrowserView" Visibility="Collapsed" />
+    </Grid>
+  </DockPanel>
+</UserControl>

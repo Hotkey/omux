@@ -38,11 +38,14 @@ struct TabItem: Identifiable, Codable, Hashable {
     var color: TabColor = .none
     /// Stable Claude Code session id so the conversation resumes across relaunches.
     var claudeSessionID = UUID()
+    /// Set when the session runs in its own git worktree; `directory` is the worktree.
+    var worktree: Worktree?
 
-    init(name: String, directory: String? = nil, command: String? = nil) {
+    init(name: String, directory: String? = nil, command: String? = nil, worktree: Worktree? = nil) {
         self.name = name
         self.directory = directory
         self.command = command
+        self.worktree = worktree
     }
 
     // Every field is optional on decode so saved workspaces survive schema changes.
@@ -54,7 +57,16 @@ struct TabItem: Identifiable, Codable, Hashable {
         command = try c.decodeIfPresent(String.self, forKey: .command)
         color = try c.decodeIfPresent(TabColor.self, forKey: .color) ?? .none
         claudeSessionID = try c.decodeIfPresent(UUID.self, forKey: .claudeSessionID) ?? UUID()
+        worktree = try c.decodeIfPresent(Worktree.self, forKey: .worktree)
     }
+}
+
+struct Worktree: Codable, Hashable {
+    var branch: String
+    /// The branch it was made from; diffs and merges compare against it.
+    var base: String
+    /// The main checkout that owns the worktree.
+    var repo: String
 }
 
 struct TabGroup: Identifiable, Codable, Hashable {
@@ -63,6 +75,8 @@ struct TabGroup: Identifiable, Codable, Hashable {
     var directory: String?
     var command: String? = "claude"
     var isCollapsed = false
+    /// New sessions get their own git worktree.
+    var useWorktrees = false
     var tabs: [TabItem] = []
 
     init(name: String, directory: String? = nil, tabs: [TabItem] = []) {
@@ -78,6 +92,7 @@ struct TabGroup: Identifiable, Codable, Hashable {
         directory = try c.decodeIfPresent(String.self, forKey: .directory)
         command = try c.decodeIfPresent(String.self, forKey: .command)
         isCollapsed = try c.decodeIfPresent(Bool.self, forKey: .isCollapsed) ?? false
+        useWorktrees = try c.decodeIfPresent(Bool.self, forKey: .useWorktrees) ?? false
         tabs = try c.decodeIfPresent([TabItem].self, forKey: .tabs) ?? []
     }
 }
@@ -98,13 +113,28 @@ struct TabRuntime: Equatable {
     var busy = false
     var statusState: StatusState?
     var statusDetail: String?
+    /// Why a blocked program waits: permission, question or auth.
+    var statusKind: String?
+    /// OSC 7501 records other than the root, e.g. Claude Code's subagents.
+    var statusChildren: [StatusChild] = []
 
     enum StatusState: String { case idle, working, done, blocked, error }
+
+    struct StatusChild: Equatable {
+        let id: String
+        let state: StatusState?
+        let kind: String?
+        let message: String?
+        let title: String?
+    }
+
+    /// Claude Code is waiting on a tool permission, which Allow/Deny can answer.
+    var awaitsPermission: Bool { statusState == .blocked && statusKind == "permission" }
 
     func statusLine(showFolder: Bool = true) -> String? {
         if let s = statusState {
             switch s {
-            case .blocked: return statusDetail.map { "Needs you · \($0)" } ?? "Needs you"
+            case .blocked: return (statusDetail ?? statusKind).map { "Needs you · \($0)" } ?? "Needs you"
             case .working: return statusDetail.map { "Working · \($0)" } ?? "Working…"
             case .done: return "Done"
             case .error: return statusDetail.map { "Error · \($0)" } ?? "Error"
